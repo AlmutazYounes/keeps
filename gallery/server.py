@@ -15,6 +15,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 import captions_db
+import candidates
 import faces_db
 import jobs_db
 import library_actions
@@ -31,6 +32,7 @@ VIEWS = APP / "cache" / "views"
 PAGE = APP / "static" / "index.html"
 FACES_PAGE = APP / "static" / "faces.html"
 SETTINGS_PAGE = APP / "static" / "settings.html"
+REVIEW_PAGE = APP / "static" / "review.html"
 VENV_PYTHON = APP / ".venv" / "bin" / "python"
 INDEX_JOBS = {
     "faces": "index_faces.py",
@@ -751,6 +753,35 @@ def ensure_face_box(face_id):
         return None
 
 
+def candidate_payload():
+    texts = captions_db.caption_map() if captions_db.DB_PATH.exists() else {}
+    faced = set()
+    if faces_db.DB_PATH.exists():
+        conn = faces_db.connect()
+        try:
+            faced = {row[0] for row in conn.execute("SELECT DISTINCT relpath FROM faces")}
+        finally:
+            conn.close()
+    items = []
+    for photo in LIBRARY["by_id"].values():
+        if photo["kind"] == "video":
+            continue
+        caption = texts.get(photo["rel"]) or ""
+        if not caption:
+            continue
+        reason = candidates.reason_for(photo["name"], caption, photo["rel"] in faced)
+        if not reason:
+            continue
+        items.append({
+            "id": photo["id"],
+            "name": photo["name"],
+            "reason": reason,
+            "caption": caption,
+        })
+    items.sort(key=lambda item: (item["reason"], item["name"]))
+    return {"count": len(items), "items": items}
+
+
 def delete_ids(raw_ids):
     with LIBRARY_LOCK:
         chosen = []
@@ -820,6 +851,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/settings":
             self.respond(200, SETTINGS_PAGE.read_bytes(), "text/html; charset=utf-8")
+            return
+        if path == "/review":
+            self.respond(200, REVIEW_PAGE.read_bytes(), "text/html; charset=utf-8")
+            return
+        if path == "/api/candidates":
+            if not LIBRARY["ready"]:
+                self.respond(503, b'{"ready":false}', "application/json")
+                return
+            body = json.dumps(candidate_payload()).encode()
+            self.respond(200, body, "application/json")
             return
         if path == "/api/sync":
             if not LIBRARY["ready"]:
