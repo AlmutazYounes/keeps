@@ -574,7 +574,7 @@ def place_name(lat, lon):
         )
         request = urllib.request.Request(
             url,
-            headers={"User-Agent": "LocalPhotos/1.0 (personal photo library)"},
+            headers={"User-Agent": "Keeps/1.0 (personal photo library)"},
         )
         with urllib.request.urlopen(request, timeout=4) as response:
             payload = json.loads(response.read().decode())

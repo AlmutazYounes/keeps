@@ -1,6 +1,6 @@
-# Local photos
+# Keeps
 
-A private gallery for a Google Photos takeout. Photos already live in `Photos/YYYY/MM-Month/`. The site runs on your machine at http://127.0.0.1:8765.
+Keeps is a private gallery for a Google Photos takeout. Photos already live in `Photos/YYYY/MM-Month/`. The site runs on your machine at http://127.0.0.1:8765.
 
 ## Screenshots
 

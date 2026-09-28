@@ -88,7 +88,7 @@ There is no deploy. Run the server on this Mac.
 
 ## Links
 
-https://github.com/AlmutazYounes/local-photos
+https://github.com/AlmutazYounes/keeps
 
 ## Env var names
 
