@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 import captions_db
 import faces_db
 import jobs_db
+import library_actions
 import search_lib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -70,6 +71,7 @@ MONTH_NAMES = {
 }
 
 LIBRARY = {"ready": False, "count": 0, "groups": [], "by_id": {}}
+LIBRARY_LOCK = threading.Lock()
 SEM = threading.Semaphore(4)
 LOCKS = {}
 LOCKS_GUARD = threading.Lock()
@@ -749,6 +751,40 @@ def ensure_face_box(face_id):
         return None
 
 
+def delete_ids(raw_ids):
+    with LIBRARY_LOCK:
+        chosen = []
+        seen = set()
+        for value in raw_ids:
+            try:
+                photo_id = int(value)
+            except (TypeError, ValueError):
+                continue
+            if photo_id in seen:
+                continue
+            seen.add(photo_id)
+            photo = LIBRARY["by_id"].get(photo_id)
+            if photo is not None:
+                chosen.append(photo)
+        existing = []
+        missing = []
+        for photo in chosen:
+            try:
+                existing.append((photo, library_actions.photo_file(PHOTOS, photo["rel"])))
+            except FileNotFoundError:
+                missing.append(photo)
+        if existing:
+            library_actions.move_to_trash([path for _, path in existing])
+        removed = library_actions.drop_photos(
+            LIBRARY,
+            [photo["id"] for photo, _ in existing] + [photo["id"] for photo in missing],
+        )
+        for photo in removed:
+            for path in (thumb_path(photo), view_path(photo)):
+                path.unlink(missing_ok=True)
+        return [photo["id"] for photo in removed]
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -880,6 +916,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def route_post(self):
         path = urlparse(self.path).path
+        if path == "/api/delete":
+            self.delete_selected()
+            return
         if not path.startswith("/api/people/"):
             self.respond(404, b"not found", "text/plain")
             return
@@ -896,6 +935,20 @@ class Handler(BaseHTTPRequestHandler):
             "name": name,
             "merged_into": merged_into,
         }).encode()
+        self.respond(200, body, "application/json")
+
+    def delete_selected(self):
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length > 100000:
+            self.respond(413, b"too large", "text/plain")
+            return
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        raw_ids = payload.get("ids") or []
+        if not isinstance(raw_ids, list) or len(raw_ids) > 200:
+            self.respond(400, b"bad ids", "text/plain")
+            return
+        removed = delete_ids(raw_ids)
+        body = json.dumps({"ok": True, "removed": removed}).encode()
         self.respond(200, body, "application/json")
 
     def photo_from_token(self, token):

@@ -248,6 +248,42 @@ try {
     cursor: pointer; overflow: hidden;
   }
   .cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cell .tick { display: none; }
+  body.selecting .cell .tick {
+    display: block;
+    position: absolute; top: 8px; right: 8px;
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid #fff;
+    background: rgba(0,0,0,.35);
+    box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  }
+  body.selecting .cell.picked .tick { background: #1a73e8; border-color: #1a73e8; }
+  body.selecting .cell.picked .tick::after {
+    content: "";
+    position: absolute; left: 6px; top: 3px;
+    width: 5px; height: 9px;
+    border: solid #fff; border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  #selectbar {
+    display: none;
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    z-index: 8; align-items: center; gap: 8px;
+    padding: 8px 10px 8px 16px;
+    background: var(--float); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  }
+  body.selecting #selectbar { display: flex; }
+  #select-count { font-size: 14px; font-weight: 600; white-space: nowrap; margin-right: 6px; }
+  #lb-share, #lb-delete {
+    position: absolute; top: 12px; z-index: 2;
+    border: 0; border-radius: 999px;
+    background: rgba(255,255,255,.12); color: #fff;
+    height: 40px; padding: 0 14px; font: inherit; font-size: 14px; cursor: pointer;
+  }
+  #lb-share { left: 16px; }
+  #lb-delete { left: 92px; }
   .badge {
     position: absolute; left: 8px; bottom: 8px;
     width: 26px; height: 26px; border-radius: 50%;
@@ -342,6 +378,7 @@ try {
   <a class="nav" href="/settings">Settings</a>
   <div id="count"></div>
   <button id="theme" class="nav" type="button">Light</button>
+  <button id="select" class="nav" type="button" aria-pressed="false">Select</button>
   <button id="search-help" class="nav" type="button" aria-expanded="false" aria-controls="search-help-panel">Help</button>
   <input id="search" type="search" placeholder="Search photos" autocomplete="off">
 </header>
@@ -404,8 +441,16 @@ try {
     <div id="scrub-now"></div>
   </div>
 </aside>
+<div id="selectbar">
+  <span id="select-count">0 selected</span>
+  <button id="select-share" class="nav" type="button">Share</button>
+  <button id="select-delete" class="nav" type="button">Delete</button>
+  <button id="select-cancel" class="nav" type="button">Cancel</button>
+</div>
 <div id="lb">
   <button id="lb-close" type="button" aria-label="Close">×</button>
+  <button id="lb-share" type="button">Share</button>
+  <button id="lb-delete" type="button">Delete</button>
   <button id="lb-info" type="button" aria-label="Info">
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
       <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"></circle>
@@ -445,6 +490,8 @@ const infoEl = document.getElementById("info");
 let captionById = {};
 let allGroups = [];
 let groups = [];
+let selecting = false;
+const selectedIds = new Set();
 let namedPeople = [];
 let flat = [];
 let layout = null;
@@ -570,8 +617,9 @@ function render() {
         const y = block.top + block.header + row * rowH;
         ids.push(item[0]);
         const badge = item[2] === "video" ? `<span class="badge"></span>` : "";
+        const picked = selectedIds.has(item[0]) ? " picked" : "";
         parts.push(
-          `<button class="cell" data-id="${item[0]}" style="transform:translate(${x}px,${y}px);width:${block.cell}px;height:${block.cell}px"><img src="${sourceFor(item, false)}" alt="">${badge}</button>`
+          `<button class="cell${picked}" data-id="${item[0]}" style="transform:translate(${x}px,${y}px);width:${block.cell}px;height:${block.cell}px"><img src="${sourceFor(item, false)}" alt=""><span class="tick"></span>${badge}</button>`
         );
       }
     }
@@ -806,7 +854,113 @@ function step(delta) {
 stage.addEventListener("click", (event) => {
   const button = event.target.closest(".cell");
   if (!button) return;
-  openAt(Number(button.dataset.id));
+  const id = Number(button.dataset.id);
+  if (selecting) {
+    if (selectedIds.has(id)) selectedIds.delete(id);
+    else selectedIds.add(id);
+    button.classList.toggle("picked", selectedIds.has(id));
+    paintSelectBar();
+    return;
+  }
+  openAt(id);
+});
+
+function itemById(id) {
+  for (const group of allGroups) {
+    const item = group.items.find((entry) => entry[0] === id);
+    if (item) return item;
+  }
+  return null;
+}
+
+function paintSelectBar() {
+  const count = selectedIds.size;
+  const noun = count === 1 ? "item" : "items";
+  document.getElementById("select-count").textContent = count + " " + noun;
+  document.getElementById("select-share").disabled = count === 0;
+  document.getElementById("select-delete").disabled = count === 0;
+}
+
+function setSelecting(on) {
+  selecting = on;
+  document.body.classList.toggle("selecting", on);
+  const button = document.getElementById("select");
+  button.classList.toggle("on", on);
+  button.setAttribute("aria-pressed", on ? "true" : "false");
+  button.textContent = on ? "Done" : "Select";
+  if (!on) selectedIds.clear();
+  paintSelectBar();
+  lastKey = "";
+  render();
+}
+
+async function shareIds(ids) {
+  const files = [];
+  for (const id of ids) {
+    const item = itemById(id);
+    if (!item) continue;
+    const response = await fetch("/media/" + id);
+    if (!response.ok) throw new Error("missing");
+    const blob = await response.blob();
+    const type = blob.type || (item[2] === "video" ? "video/mp4" : "image/jpeg");
+    files.push(new File([blob], item[1], { type }));
+  }
+  if (!files.length) return;
+  if (navigator.canShare && navigator.canShare({ files })) {
+    await navigator.share({ files });
+    return;
+  }
+  files.forEach((file) => {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(file);
+    link.download = file.name;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+}
+
+function forgetIds(ids) {
+  const gone = new Set(ids);
+  allGroups.forEach((group) => {
+    group.items = group.items.filter((item) => !gone.has(item[0]));
+  });
+  allGroups = allGroups.filter((group) => group.items.length);
+  ids.forEach((id) => selectedIds.delete(id));
+  if (openIndex >= 0 && gone.has(flat[openIndex].item[0])) closeLb();
+  paintSelectBar();
+  applyView();
+  renderHighlights();
+}
+
+async function deleteIds(ids) {
+  if (!ids.length) return;
+  const noun = ids.length === 1 ? "this item" : ids.length + " items";
+  if (!window.confirm("Move " + noun + " to Trash?")) return;
+  const response = await fetch("/api/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+  if (!response.ok) throw new Error("delete failed");
+  const data = await response.json();
+  forgetIds(data.removed || []);
+}
+
+document.getElementById("select").addEventListener("click", () => setSelecting(!selecting));
+document.getElementById("select-cancel").addEventListener("click", () => setSelecting(false));
+document.getElementById("select-share").addEventListener("click", () => {
+  shareIds([...selectedIds]).catch(() => {});
+});
+document.getElementById("select-delete").addEventListener("click", () => {
+  deleteIds([...selectedIds]).catch(() => {});
+});
+document.getElementById("lb-share").addEventListener("click", () => {
+  if (openIndex < 0) return;
+  shareIds([flat[openIndex].item[0]]).catch(() => {});
+});
+document.getElementById("lb-delete").addEventListener("click", () => {
+  if (openIndex < 0) return;
+  deleteIds([flat[openIndex].item[0]]).catch(() => {});
 });
 yearsEl.addEventListener("click", (event) => {
   const button = event.target.closest("button");
