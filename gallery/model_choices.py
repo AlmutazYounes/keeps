@@ -3,8 +3,9 @@
 import json
 from pathlib import Path
 
-ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
-APP = ROOT / "gallery"
+import library_root
+
+APP = library_root.program_dir()
 MODELS = APP / "models"
 CHOICES = APP / "jobs" / "model_choices.json"
 

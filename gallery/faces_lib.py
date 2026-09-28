@@ -1,20 +1,18 @@
 """Detect faces, embed them, and group the same person together."""
 
 import subprocess
-from pathlib import Path
 
 import faces_db
+import library_root
 import model_choices
 
 import cv2
 import numpy as np
 import onnxruntime as ort
 
-ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
-PHOTOS = ROOT / "Photos"
-APP = ROOT / "gallery"
-MODELS = APP / "models"
-CROP_DIR = APP / "cache" / "faces"
+PHOTOS = library_root.photos_dir()
+MODELS = library_root.program_dir() / "models"
+CROP_DIR = library_root.data_dir() / "cache" / "faces"
 DET_PATH = MODELS / "10g_bnkps.onnx"
 REC_PATH = MODELS / "arcface_w600k_r50_batch.onnx"
 

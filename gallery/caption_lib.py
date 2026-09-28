@@ -9,8 +9,9 @@ import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
 
-ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
-PHOTOS = ROOT / "Photos"
+import library_root
+
+PHOTOS = library_root.photos_dir()
 PROMPT = "Describe with a paragraph what is shown in the image."
 EOS = 2
 MAX_NEW_TOKENS = 64
@@ -34,7 +35,7 @@ def load_bgr(path):
     src = path
     tmp = None
     if ext in {".heic", ".heif", ".tif", ".tiff", ".bmp"}:
-        tmp = ROOT / "gallery" / "cache" / "_caption.jpg"
+        tmp = library_root.data_dir() / "cache" / "_caption.jpg"
         tmp.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             ["sips", "-s", "format", "jpeg", "--out", str(tmp), str(path)],

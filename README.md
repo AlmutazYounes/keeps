@@ -16,7 +16,7 @@ Python 3. From the repo root:
 python3 gallery/server.py
 ```
 
-The scripts look for `/Volumes/SamsungT7/Google Photos Backup`. Change `ROOT` if your copy lives somewhere else.
+The library is the folder Keeps lives in. Settings can point it at another folder. The next start opens that folder.
 
 The rest of the setup is in [docs/guide.md](docs/guide.md).
 

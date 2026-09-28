@@ -11,8 +11,9 @@ import dispose_db
 import dispose_lib
 import jobs_db
 
-ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
-PHOTOS = ROOT / "Photos"
+import library_root
+
+PHOTOS = library_root.photos_dir()
 IMAGE_EXT = {
     ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
     ".tif", ".tiff", ".bmp",

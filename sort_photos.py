@@ -17,7 +17,12 @@ import sys
 import zipfile
 from pathlib import Path
 
-ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
+_GALLERY = Path(__file__).resolve().parent / "gallery"
+if str(_GALLERY) not in sys.path:
+    sys.path.insert(0, str(_GALLERY))
+import library_root
+
+ROOT = library_root.library_root()
 DEST = ROOT / "Photos"
 STAGING = ROOT / "_staging"
 DB_PATH = ROOT / "_sort_state.sqlite"

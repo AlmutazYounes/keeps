@@ -27,17 +27,19 @@ import dispose_lib
 import faces_db
 import jobs_db
 import library_actions
+import library_root
 import model_choices
 import search_lib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
-PHOTOS = ROOT / "Photos"
-APP = ROOT / "gallery"
-CACHE = APP / "cache" / "thumbs"
-VIEWS = APP / "cache" / "views"
+ROOT = library_root.library_root()
+PHOTOS = library_root.photos_dir()
+APP = library_root.program_dir()
+DATA = library_root.data_dir()
+CACHE = DATA / "cache" / "thumbs"
+VIEWS = DATA / "cache" / "views"
 PAGE = APP / "static" / "index.html"
 FACES_PAGE = APP / "static" / "faces.html"
 SETTINGS_PAGE = APP / "static" / "settings.html"
@@ -50,11 +52,11 @@ INDEX_JOBS = {
     "faces": "index_faces.py",
     "captions": "index_captions.py",
 }
-FACE_CROPS = APP / "cache" / "faces"
-FACE_BOXES = APP / "cache" / "facebox"
-PLACE_PATH = APP / "cache" / "places.json"
+FACE_CROPS = DATA / "cache" / "faces"
+FACE_BOXES = DATA / "cache" / "facebox"
+PLACE_PATH = DATA / "cache" / "places.json"
 PLACE_LOCK = threading.Lock()
-GEO_PATH = APP / "cache" / "geo.json"
+GEO_PATH = DATA / "cache" / "geo.json"
 GEO_LOCK = threading.Lock()
 GEO = {"by_rel": {}, "done": False, "total": 0, "scanned": 0}
 _geo_started = False
@@ -1323,6 +1325,10 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(candidate_payload()).encode()
             self.respond(200, body, "application/json")
             return
+        if path == "/api/library-root":
+            body = json.dumps(library_root.describe(ROOT)).encode()
+            self.respond(200, body, "application/json")
+            return
         if path == "/api/models":
             body = json.dumps({"roles": model_choices.view()}).encode()
             self.respond(200, body, "application/json")
@@ -1425,6 +1431,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def route_post(self):
         path = urlparse(self.path).path
+        if path == "/api/library-root":
+            self.save_library_root()
+            return
         if path == "/api/models":
             self.save_model_choices()
             return
@@ -1486,6 +1495,36 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(409, body, "application/json")
             return
         body = json.dumps({"ok": True, **sync_payload()}).encode()
+        self.respond(200, body, "application/json")
+
+    def save_library_root(self):
+        payload = self.json_body()
+        if payload is None:
+            self.respond(413, b"too large", "text/plain")
+            return
+        try:
+            if payload.get("pick"):
+                library_root.choose_folder()
+            else:
+                library_root.save_root(payload.get("root"))
+        except PermissionError:
+            body = json.dumps({
+                "ok": False,
+                "denied": True,
+                **library_root.describe(ROOT),
+            }).encode()
+            self.respond(403, body, "application/json")
+            return
+        except ValueError as exc:
+            reason = "cancelled" if str(exc) == "cancelled" else "not a folder"
+            body = json.dumps({
+                "ok": False,
+                "reason": reason,
+                **library_root.describe(ROOT),
+            }).encode()
+            self.respond(400, body, "application/json")
+            return
+        body = json.dumps({"ok": True, **library_root.describe(ROOT)}).encode()
         self.respond(200, body, "application/json")
 
     def save_model_choices(self):
