@@ -76,6 +76,11 @@ Type a sentence in the search box. The gallery reads a saved person, a year or a
 - `sam in 2025` keeps Sam in 2025.
 - `sam 2025 july` keeps Sam in July 2025. The month, year, and day can sit in any order.
 - `September 2025` and `Sep 25, 2025` use the date stored on the item.
+- `screenshots from 2024` keeps screenshots from 2024.
+- `documents in 2025` keeps documents from 2025.
+- A place name works like a person name. `sam albany` keeps Sam in Albany when that location is saved on the photo.
+
+A photo with no description is not treated as a screenshot or a document. A photo with no location is not given a place. Videos stay out of these groups.
 
 A saved name matches without caring about capitalization. That includes a person whose name is an ordinary English word.
 
@@ -86,6 +91,10 @@ Videos are not given descriptions, and faces are not saved for them. A video sea
 Choose Select, then tap photos or videos. Share sends those files to the system share sheet. Delete asks first, then moves the files to Trash and takes them off the grid. The open photo has the same two actions.
 
 Review lists still photos that look disposable: a screenshot, a document, or a blurry frame with no person. A photo with no description yet is left alone. Nothing is deleted until you choose Delete there.
+
+## Categories
+
+Categories gathers screenshots, documents, and places. Open a card to see that group on the photo grid. A screenshot of a map can be a screenshot and also have a place. Places come from coordinates already saved on the file. The gallery does not invent a city when those coordinates have no saved name.
 
 ## Faces
 

@@ -97,6 +97,44 @@ class ParseTests(unittest.TestCase):
         both = parsed("omar hamza and hamza")
         self.assertEqual(both["people"], ["Omar Hamza", "Hamza"])
 
+    def test_category_and_place_queries(self):
+        shots = search_lib.parse_query("screenshots from 2024")
+        self.assertEqual(shots["category"], "screenshot")
+        self.assertEqual(shots["year"], 2024)
+        self.assertEqual(shots["words"], [])
+        docs = search_lib.parse_query("documents in 2025")
+        self.assertEqual(docs["category"], "document")
+        self.assertEqual(docs["year"], 2025)
+        self.assertEqual(docs["words"], [])
+        placed = search_lib.parse_query("albany 2024", places=["Albany, NY"])
+        self.assertEqual(placed["place"], "Albany, NY")
+        self.assertEqual(placed["year"], 2024)
+        self.assertEqual(placed["words"], [])
+
+    def test_category_and_place_filters(self):
+        item = [1, "map.jpg", "image", "2024-06-01"]
+        self.assertTrue(search_lib.item_matches(
+            item,
+            {"category": "screenshot", "year": 2024},
+            kinds=["screenshot"],
+        ))
+        self.assertFalse(search_lib.item_matches(
+            item,
+            {"category": "screenshot"},
+            kinds=[],
+        ))
+        self.assertTrue(search_lib.item_matches(
+            [2, "page.jpg", "image", "2025-01-02"],
+            {"category": "document", "year": 2025, "place": "Albany, NY"},
+            kinds=["document"],
+            place="Albany, NY",
+        ))
+        self.assertFalse(search_lib.item_matches(
+            [2, "page.jpg", "image", "2025-01-02"],
+            {"place": "Albany, NY"},
+            place="",
+        ))
+
     def test_month_and_year_in_any_order(self):
         people = [{"name": "Me", "ids": [1]}]
         for text in ("me 2025 july", "july me 2025", "me july 2025", "2025 july me"):
@@ -269,6 +307,8 @@ class PageCopyTests(unittest.TestCase):
         self.assertIn("yara in a carseat video", html)
         self.assertIn("me wearing yellow", html)
         self.assertIn("me in 2025", html)
+        self.assertIn("screenshots from 2024", html)
+        self.assertIn("documents in 2025", html)
         self.assertIn("Videos are not given descriptions", html)
         self.assertNotIn("\u2014", html)
 
@@ -277,6 +317,8 @@ class PageCopyTests(unittest.TestCase):
         self.assertIn("alex in a carseat video", readme)
         self.assertIn("sam wearing yellow", readme)
         self.assertIn("sam in 2025", readme)
+        self.assertIn("screenshots from 2024", readme)
+        self.assertIn("documents in 2025", readme)
         self.assertNotIn("Yara", readme)
         self.assertNotIn("Haneen", readme)
         self.assertNotIn("\u2014", readme)

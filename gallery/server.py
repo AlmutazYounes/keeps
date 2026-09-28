@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 import captions_db
 import candidates
+import categories
 import faces_db
 import jobs_db
 import library_actions
@@ -33,6 +34,7 @@ PAGE = APP / "static" / "index.html"
 FACES_PAGE = APP / "static" / "faces.html"
 SETTINGS_PAGE = APP / "static" / "settings.html"
 REVIEW_PAGE = APP / "static" / "review.html"
+CATEGORIES_PAGE = APP / "static" / "categories.html"
 VENV_PYTHON = APP / ".venv" / "bin" / "python"
 INDEX_JOBS = {
     "faces": "index_faces.py",
@@ -42,6 +44,10 @@ FACE_CROPS = APP / "cache" / "faces"
 FACE_BOXES = APP / "cache" / "facebox"
 PLACE_PATH = APP / "cache" / "places.json"
 PLACE_LOCK = threading.Lock()
+GEO_PATH = APP / "cache" / "geo.json"
+GEO_LOCK = threading.Lock()
+GEO = {"by_rel": {}, "done": False, "total": 0, "scanned": 0}
+_geo_started = False
 US_STATES = {
     "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR",
     "California": "CA", "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE",
@@ -323,7 +329,8 @@ def person_record(conn, person_id, name, cover_id, count, rel_to_photo):
 
 def search_payload(query):
     people = people_payload().get("people") or []
-    parsed = search_lib.parse_query(query, people)
+    facts = category_facts()
+    parsed = search_lib.parse_query(query, people, facts["names"])
     ids_by_person = {}
     for person in people:
         name = (person.get("name") or "").strip()
@@ -336,7 +343,12 @@ def search_payload(query):
         if text:
             captions[photo_id] = text
     matched = search_lib.filter_groups(
-        LIBRARY["groups"], parsed, captions, ids_by_person
+        LIBRARY["groups"],
+        parsed,
+        captions,
+        ids_by_person,
+        facts["kinds"],
+        facts["places"],
     )
     ids = [item[0] for group in matched for item in group["items"]]
     return {"filters": parsed, "count": len(ids), "ids": ids}
@@ -753,6 +765,190 @@ def ensure_face_box(face_id):
         return None
 
 
+def ensure_geo():
+    global _geo_started
+    with GEO_LOCK:
+        if _geo_started:
+            return
+        _geo_started = True
+        _load_geo()
+    threading.Thread(target=scan_geo, name="geo", daemon=True).start()
+
+
+def _load_geo():
+    try:
+        saved = json.loads(GEO_PATH.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    by_rel = {}
+    for rel, point in (saved.get("by_rel") or {}).items():
+        if isinstance(point, list) and len(point) == 2:
+            by_rel[str(rel)] = [float(point[0]), float(point[1])]
+    GEO["by_rel"] = by_rel
+    GEO["scanned"] = len(by_rel)
+    GEO["done"] = False
+
+
+def _save_geo():
+    payload = {
+        "by_rel": GEO["by_rel"],
+        "scanned": GEO["scanned"],
+        "total": GEO["total"],
+        "done": GEO["done"],
+    }
+    GEO_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = GEO_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, separators=(",", ":")))
+    os.replace(tmp, GEO_PATH)
+
+
+def scan_geo():
+    try:
+        listed = subprocess.run(
+            ["mdfind", "-onlyin", str(PHOTOS), "kMDItemLatitude >= -90"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        with GEO_LOCK:
+            GEO["done"] = True
+        return
+    paths = []
+    for line in listed.stdout.splitlines():
+        path = Path(line.strip())
+        if path.suffix.lower() in VIDEO_EXT:
+            continue
+        try:
+            rel = str(path.relative_to(PHOTOS))
+        except ValueError:
+            continue
+        paths.append((rel, path))
+    with GEO_LOCK:
+        known = set(GEO["by_rel"])
+        GEO["total"] = len(paths)
+    missing = [(rel, path) for rel, path in paths if rel not in known]
+    for start in range(0, len(missing), 80):
+        chunk = missing[start:start + 80]
+        try:
+            listed = subprocess.run(
+                [
+                    "mdls", "-name", "kMDItemLatitude", "-name", "kMDItemLongitude",
+                    *[str(path) for _, path in chunk],
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            pairs = categories.parse_mdls(listed.stdout)
+        except (OSError, subprocess.TimeoutExpired):
+            pairs = []
+        if len(pairs) != len(chunk):
+            continue
+        with GEO_LOCK:
+            for (rel, _path), pair in zip(chunk, pairs):
+                if pair[0] is None or pair[1] is None:
+                    continue
+                GEO["by_rel"][rel] = [pair[0], pair[1]]
+            GEO["scanned"] = len(GEO["by_rel"])
+            _save_geo()
+    with GEO_LOCK:
+        GEO["done"] = True
+        GEO["scanned"] = len(GEO["by_rel"])
+        _save_geo()
+
+
+def saved_place_names():
+    with PLACE_LOCK:
+        try:
+            data = json.loads(PLACE_PATH.read_text())
+        except (OSError, json.JSONDecodeError):
+            return {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def category_facts():
+    ensure_geo()
+    texts = captions_db.caption_map() if captions_db.DB_PATH.exists() else {}
+    names = saved_place_names()
+    with GEO_LOCK:
+        points = dict(GEO["by_rel"])
+        geo = {
+            "done": GEO["done"],
+            "scanned": GEO["scanned"],
+            "total": GEO["total"],
+        }
+    kinds = {}
+    places = {}
+    shots = []
+    docs = []
+    for photo in LIBRARY["by_id"].values():
+        if photo["kind"] == "video":
+            continue
+        caption = texts.get(photo["rel"]) or ""
+        found = categories.kinds_for(photo["name"], caption)
+        if found:
+            kinds[photo["id"]] = found
+        if "screenshot" in found:
+            shots.append(photo["id"])
+        if "document" in found:
+            docs.append(photo["id"])
+        point = points.get(photo["rel"])
+        if not point:
+            continue
+        places[photo["id"]] = categories.place_label(point[0], point[1], names)
+    labels = []
+    seen = set()
+    for label in places.values():
+        for name in categories.search_names(label):
+            key = name.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            labels.append(name)
+    labels.sort(key=len, reverse=True)
+    return {
+        "kinds": kinds,
+        "places": places,
+        "screenshots": shots,
+        "documents": docs,
+        "names": labels,
+        "geo": geo,
+    }
+
+
+def category_payload():
+    facts = category_facts()
+    groups = {}
+    for photo_id, label in facts["places"].items():
+        groups.setdefault(label, []).append(photo_id)
+    cards = []
+    for label, ids in groups.items():
+        cards.append({"label": label, "count": len(ids), "cover": ids[0]})
+    cards.sort(key=lambda card: (
+        0 if categories.search_names(card["label"]) else 1,
+        -card["count"],
+        card["label"],
+    ))
+    return {
+        "screenshots": _kind_card(facts["screenshots"]),
+        "documents": _kind_card(facts["documents"]),
+        "places": cards,
+        "names": facts["names"],
+        "index": {
+            "kinds": {str(photo_id): found for photo_id, found in facts["kinds"].items()},
+            "places": {str(photo_id): label for photo_id, label in facts["places"].items()},
+        },
+        "geo": facts["geo"],
+    }
+
+
+def _kind_card(ids):
+    return {"count": len(ids), "cover": ids[0] if ids else None}
+
+
 def candidate_payload():
     texts = captions_db.caption_map() if captions_db.DB_PATH.exists() else {}
     faced = set()
@@ -854,6 +1050,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/review":
             self.respond(200, REVIEW_PAGE.read_bytes(), "text/html; charset=utf-8")
+            return
+        if path == "/categories":
+            self.respond(200, CATEGORIES_PAGE.read_bytes(), "text/html; charset=utf-8")
+            return
+        if path == "/api/categories":
+            if not LIBRARY["ready"]:
+                self.respond(503, b'{"ready":false}', "application/json")
+                return
+            body = json.dumps(category_payload()).encode()
+            self.respond(200, body, "application/json")
             return
         if path == "/api/candidates":
             if not LIBRARY["ready"]:

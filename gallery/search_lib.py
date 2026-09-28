@@ -6,6 +6,8 @@ The gallery server imports this module. It uses the standard library only.
 import re
 from datetime import date
 
+import categories
+
 YEAR_MIN = 2009
 YEAR_MAX = 2026
 
@@ -39,6 +41,12 @@ STOPWORDS = frozenset({
 
 VIDEO_WORDS = frozenset({"video", "videos"})
 PHOTO_WORDS = frozenset({"photo", "photos", "picture", "pictures"})
+CATEGORY_WORDS = {
+    "screenshot": "screenshot",
+    "screenshots": "screenshot",
+    "document": "document",
+    "documents": "document",
+}
 
 TOKEN_RE = re.compile(r"[a-z0-9]+")
 ISO_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -53,17 +61,21 @@ YEAR_TOKEN_RE = re.compile(r"20\d{2}")
 ORDINAL_RE = re.compile(r"^(\d{1,2})(?:st|nd|rd|th)$")
 
 
-def parse_query(text, people=None):
-    """Split a sentence into person, date, media, and content words."""
+def parse_query(text, people=None, places=None):
+    """Split a sentence into person, place, category, date, media, and content words."""
     lower = (text or "").casefold()
     consumed = [False] * len(lower)
     matched = _people(lower, consumed, people)
+    place = _place(lower, consumed, places)
+    category = _category(lower, consumed)
     year, month, day = _date(lower, consumed)
     kind = _media(lower, consumed)
     words = _words(lower, consumed)
     return {
         "person": matched[0] if matched else "",
         "people": matched,
+        "place": place,
+        "category": category,
         "year": year,
         "month": month,
         "day": day,
@@ -73,7 +85,7 @@ def parse_query(text, people=None):
     }
 
 
-def item_matches(item, filters, caption="", ids_by_person=None, group_year="", group_month=""):
+def item_matches(item, filters, caption="", ids_by_person=None, group_year="", group_month="", kinds=None, place=""):
     """Return true when one item satisfies the filters.
 
     item is [id, name, kind, date]. kind is "video" or a still kind.
@@ -103,6 +115,14 @@ def item_matches(item, filters, caption="", ids_by_person=None, group_year="", g
         return False
     if filters.get("day") is not None and day != filters["day"]:
         return False
+    want_category = (filters.get("category") or "").casefold()
+    if want_category:
+        have = {str(part).casefold() for part in (kinds or [])}
+        if want_category not in have:
+            return False
+    want_place = filters.get("place") or ""
+    if want_place and not categories.place_matches(place, want_place):
+        return False
     file_sq = _squash(name)
     cap_sq = _squash(caption)
     for word in filters.get("words") or []:
@@ -112,9 +132,11 @@ def item_matches(item, filters, caption="", ids_by_person=None, group_year="", g
     return True
 
 
-def filter_groups(groups, filters, captions_by_id=None, ids_by_person=None):
+def filter_groups(groups, filters, captions_by_id=None, ids_by_person=None, kinds_by_id=None, places_by_id=None):
     """Keep groups that still have at least one matching item."""
     captions_by_id = captions_by_id or {}
+    kinds_by_id = kinds_by_id or {}
+    places_by_id = places_by_id or {}
     kept = []
     for group in groups or []:
         items = []
@@ -122,6 +144,12 @@ def filter_groups(groups, filters, captions_by_id=None, ids_by_person=None):
             caption = captions_by_id.get(item[0])
             if caption is None:
                 caption = captions_by_id.get(str(item[0]), "")
+            kinds = kinds_by_id.get(item[0])
+            if kinds is None:
+                kinds = kinds_by_id.get(str(item[0]), [])
+            photo_place = places_by_id.get(item[0])
+            if photo_place is None:
+                photo_place = places_by_id.get(str(item[0]), "")
             if item_matches(
                 item,
                 filters,
@@ -129,6 +157,8 @@ def filter_groups(groups, filters, captions_by_id=None, ids_by_person=None):
                 ids_by_person=ids_by_person,
                 group_year=group.get("year") or "",
                 group_month=group.get("month") or "",
+                kinds=kinds,
+                place=photo_place,
             ):
                 items.append(item)
         if items:
@@ -168,6 +198,47 @@ def _names(people):
         seen.add(key)
         found.append(name)
     found.sort(key=len, reverse=True)
+    return found
+
+
+def _place(lower, consumed, places):
+    ranked = []
+    for label in places or []:
+        text = str(label or "").strip()
+        if not text:
+            continue
+        names = [text]
+        city = text.split(",")[0].strip()
+        if city and city.casefold() != text.casefold():
+            names.append(city)
+        for name in names:
+            ranked.append((len(name), name.casefold(), text))
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    for _length, folded, label in ranked:
+        pattern = re.compile(r"(?<![a-z0-9])" + re.escape(folded) + r"(?![a-z0-9])")
+        match = pattern.search(lower)
+        if match is None or _taken(consumed, match.start(), match.end()):
+            continue
+        _mark(consumed, match.start(), match.end())
+        return label
+    return ""
+
+
+def _category(lower, consumed):
+    found = ""
+    spans = []
+    for match in TOKEN_RE.finditer(lower):
+        start, end = match.span()
+        if _taken(consumed, start, end):
+            continue
+        kind = CATEGORY_WORDS.get(match.group())
+        if not kind:
+            continue
+        if not found:
+            found = kind
+        spans.append((start, end))
+    for start, end in spans:
+        _mark(consumed, start, end)
     return found
 
 
