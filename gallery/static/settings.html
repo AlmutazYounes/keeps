@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings</title>
+<script>
+try {
+  if (localStorage.getItem("photos-theme") !== "light") document.documentElement.classList.add("dark");
+} catch (e) {}
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #fff; --ink: #202124; --muted: #5f6368; --line: #e6e8eb; --chip: #f1f3f4;
+    --nav-on: #202124; --nav-on-ink: #fff; --field: #fff; --tile: #f1f3f4;
+  }
+  html.dark {
+    color-scheme: dark;
+    --bg: #202124; --ink: #e8eaed; --muted: #9aa0a6; --line: #3c4043; --chip: #303134;
+    --nav-on: #e8eaed; --nav-on-ink: #202124; --field: #303134; --tile: #303134;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); }
+  header {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center; gap: 16px;
+    height: 64px; padding: 0 20px; background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
+  .logo { display: block; flex: none; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.03em; }
+  a { color: inherit; text-decoration: none; }
+  .nav, button.nav { background: var(--chip); border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; color: inherit; cursor: pointer; }
+  .nav.on { background: var(--nav-on); color: var(--nav-on-ink); }
+  button.nav { margin-left: auto; }
+  main { max-width: 880px; padding: 28px 20px 64px; }
+  .lead { color: var(--muted); font-size: 15px; line-height: 1.45; margin: 0 0 22px; }
+  .cards { display: grid; gap: 16px; }
+  .card {
+    background: var(--tile); border-radius: 20px; padding: 22px 22px 18px;
+  }
+  .card h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .pill {
+    border-radius: 999px; padding: 5px 10px; font-size: 13px; font-weight: 600;
+    background: var(--chip); color: var(--ink);
+  }
+  .pill.run { background: #1a73e8; color: #fff; }
+  .pill.done { background: #137333; color: #fff; }
+  html.dark .pill.done { background: #81c995; color: #202124; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 18px; }
+  .stat b { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  .bar { height: 8px; border-radius: 999px; background: var(--chip); margin-top: 18px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: #8ab4f8; border-radius: inherit; }
+  .note { margin: 12px 0 0; color: var(--muted); font-size: 14px; line-height: 1.4; }
+  #status { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">
+    <svg class="logo" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+      <polygon points="16,3 3,29 16,20.3" fill="#e53935"></polygon>
+      <polygon points="29,29 16,3 16,20.3" fill="#1a73e8"></polygon>
+      <polygon points="3,29 29,29 16,20.3" fill="#f9ab00"></polygon>
+    </svg>
+    <h1>Photos</h1>
+  </a>
+  <a class="nav" href="/">Photos</a>
+  <a class="nav" href="/videos">Videos</a>
+  <a class="nav" href="/faces">Faces</a>
+  <a class="nav on" href="/settings">Settings</a>
+  <button id="theme" class="nav" type="button">Light</button>
+</header>
+<main>
+  <p class="lead" id="status">Checking the databases...</p>
+  <div class="cards" id="cards" hidden></div>
+</main>
+<script>
+const themeBtn = document.getElementById("theme");
+const statusEl = document.getElementById("status");
+const cardsEl = document.getElementById("cards");
+
+function paintTheme() {
+  const dark = document.documentElement.classList.contains("dark");
+  themeBtn.textContent = dark ? "Light" : "Dark";
+}
+themeBtn.addEventListener("click", () => {
+  document.documentElement.classList.toggle("dark");
+  localStorage.setItem("photos-theme", document.documentElement.classList.contains("dark") ? "dark" : "light");
+  paintTheme();
+});
+paintTheme();
+
+function card(title, job) {
+  const total = job.total || 0;
+  const width = total ? Math.round((job.synced / total) * 100) : 0;
+  const tone = job.running ? "run" : (job.remaining === 0 ? "done" : "");
+  return `<section class="card">
+    <div class="head">
+      <h2>${title}</h2>
+      <div class="pill ${tone}">${job.label}</div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>${job.synced.toLocaleString()}</b><span>Synced</span></div>
+      <div class="stat"><b>${job.remaining.toLocaleString()}</b><span>Remaining</span></div>
+      <div class="stat"><b>${total.toLocaleString()}</b><span>Still photos</span></div>
+    </div>
+    <div class="bar"><i style="width:${width}%"></i></div>
+    <p class="note">${job.note}</p>
+  </section>`;
+}
+
+function paint(data) {
+  statusEl.textContent = data.images.toLocaleString() + " still photos are checked against the databases. Finished photos are not run again.";
+  cardsEl.hidden = false;
+  cardsEl.innerHTML = card("Face recognition", data.faces) + card("Photo descriptions", data.captions);
+}
+
+function load() {
+  fetch("/api/sync")
+    .then((response) => response.ok ? response.json() : null)
+    .then((data) => {
+      if (!data || !data.faces) {
+        statusEl.textContent = "The library is still scanning.";
+        return;
+      }
+      paint(data);
+    })
+    .catch(() => { statusEl.textContent = "Could not read sync status."; });
+}
+load();
+setInterval(load, 3000);
+</script>
+</body>
+</html>

@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 import captions_db
 import faces_db
+import jobs_db
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -27,6 +28,12 @@ CACHE = APP / "cache" / "thumbs"
 VIEWS = APP / "cache" / "views"
 PAGE = APP / "static" / "index.html"
 FACES_PAGE = APP / "static" / "faces.html"
+SETTINGS_PAGE = APP / "static" / "settings.html"
+VENV_PYTHON = APP / ".venv" / "bin" / "python"
+INDEX_JOBS = {
+    "faces": "index_faces.py",
+    "captions": "index_captions.py",
+}
 FACE_CROPS = APP / "cache" / "faces"
 FACE_BOXES = APP / "cache" / "facebox"
 PLACE_PATH = APP / "cache" / "places.json"
@@ -753,6 +760,16 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/faces":
             self.respond(200, FACES_PAGE.read_bytes(), "text/html; charset=utf-8")
             return
+        if path == "/settings":
+            self.respond(200, SETTINGS_PAGE.read_bytes(), "text/html; charset=utf-8")
+            return
+        if path == "/api/sync":
+            if not LIBRARY["ready"]:
+                self.respond(503, b'{"ready":false}', "application/json")
+                return
+            body = json.dumps(sync_payload()).encode()
+            self.respond(200, body, "application/json")
+            return
         if path == "/api/people":
             body = json.dumps(people_payload()).encode()
             self.respond(200, body, "application/json")
@@ -942,11 +959,108 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def still_photos():
+    return [photo for photo in LIBRARY["by_id"].values() if photo["kind"] != "video"]
+
+
+def same_time(left, right):
+    try:
+        return abs(float(left) - float(right)) < 0.001
+    except (TypeError, ValueError):
+        return False
+
+
+def job_counts(name):
+    photos = still_photos()
+    total = len(photos)
+    if name == "faces":
+        scanned = faces_db.scanned_set()
+        synced = sum(1 for photo in photos if photo["rel"] in scanned)
+    else:
+        saved = captions_db.saved_times()
+        synced = sum(
+            1 for photo in photos
+            if photo["rel"] in saved and same_time(saved[photo["rel"]], photo["mtime"])
+        )
+    return synced, max(0, total - synced), total
+
+
+def script_running(script):
+    result = subprocess.run(
+        ["pgrep", "-fl", script],
+        capture_output=True,
+        text=True,
+    )
+    for line in result.stdout.splitlines():
+        if script in line and "server.py" not in line:
+            return True
+    return False
+
+
+def job_view(name):
+    synced, remaining, total = job_counts(name)
+    row = jobs_db.read(name)
+    running = script_running(INDEX_JOBS[name]) or (
+        row["state"] == "running" and jobs_db.pid_alive(row["pid"])
+    )
+    if remaining == 0:
+        running = False
+    if remaining == 0:
+        label = "Up to date"
+        note = "Saved in the database. A restart does not run this again."
+    elif running:
+        label = "In progress"
+        note = row["note"] or "Working through photos that are not in the database yet."
+    else:
+        label = "Waiting"
+        note = row["note"] or "New photos will be picked up when the gallery starts."
+    return {
+        "synced": synced,
+        "remaining": remaining,
+        "total": total,
+        "running": running,
+        "label": label,
+        "note": note,
+    }
+
+
+def sync_payload():
+    return {
+        "images": len(still_photos()),
+        "faces": job_view("faces"),
+        "captions": job_view("captions"),
+    }
+
+
+def resume_jobs():
+    if not LIBRARY["ready"]:
+        return
+    for name, script in INDEX_JOBS.items():
+        view = job_view(name)
+        print(
+            f"{name}: {view['synced']} synced, {view['remaining']} remaining, "
+            f"running={view['running']}",
+            flush=True,
+        )
+        if view["remaining"] == 0 or view["running"]:
+            continue
+        if not VENV_PYTHON.is_file():
+            print(f"{name}: no indexer at {VENV_PYTHON}", flush=True)
+            continue
+        subprocess.Popen(
+            [str(VENV_PYTHON), "-u", script],
+            cwd=str(APP),
+            start_new_session=True,
+        )
+        print(f"{name}: started {script} for {view['remaining']} photos", flush=True)
+
+
 def main():
     CACHE.mkdir(parents=True, exist_ok=True)
     VIEWS.mkdir(parents=True, exist_ok=True)
     print("Scanning library...", flush=True)
     scan()
+    resume_jobs()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Open http://{HOST}:{PORT}", flush=True)
     server.serve_forever()

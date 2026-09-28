@@ -39,6 +39,19 @@ def caption_map():
         conn.close()
 
 
+def saved_times():
+    if not DB_PATH.exists():
+        return {}
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT relpath, mtime FROM captions WHERE ok = 1"
+        )
+        return {relpath: mtime for relpath, mtime in rows}
+    finally:
+        conn.close()
+
+
 def one(relpath):
     if not DB_PATH.exists():
         return ""

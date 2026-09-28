@@ -103,6 +103,16 @@ def merge_same_names(conn):
     return merged
 
 
+def scanned_set():
+    if not DB_PATH.exists():
+        return set()
+    conn = connect()
+    try:
+        return {row[0] for row in conn.execute("SELECT relpath FROM scanned")}
+    finally:
+        conn.close()
+
+
 def set_name(person_id, name):
     conn = connect()
     name = name.strip()

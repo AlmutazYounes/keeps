@@ -76,11 +76,13 @@ Each still photo gets a short paragraph. Search uses that text. The job walks th
 
 Do not run `sort_photos.py` for these. That script is only for a fresh `takeout-*.zip`.
 
-Nothing watches the folders.
+Face results and descriptions are saved in their databases. Stopping the gallery does not erase them, and starting it again does not repeat finished photos.
+
+On startup the server compares the folders with those databases. It runs face recognition and descriptions only for still photos that are missing or were changed. Open Settings to see how many are synced, how many are left, and whether a job is in progress.
 
 1. Put the file under `Photos/`.
-2. Start `gallery/server.py` again so the grid can see it.
-3. Run `gallery/index_faces.py` so the face index picks it up.
-4. Run `gallery/index_captions.py` so it gets a description.
+2. Start `gallery/server.py` again.
+
+The grid picks up the file from that scan. The two jobs then save the new photo and leave the rest alone.
 
 Videos show in the Videos tab. The face index and the caption index only read still photos.
