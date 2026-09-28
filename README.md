@@ -8,15 +8,15 @@ These pictures use colored placeholders. They are not photos from anyone's libra
 
 ### Home
 
-![Home page with placeholder memories, a day grid, and the date scrubber](docs/images/home.png)
+![Home page of Keeps, with placeholder memories, a day grid, and the date scrubber](docs/images/home.png)
 
 ### Faces
 
-![Faces page with placeholder people](docs/images/faces.png)
+![Faces page of Keeps, with placeholder people](docs/images/faces.png)
 
 ### Settings
 
-![Settings page with sample sync counts](docs/images/settings.png)
+![Settings page of Keeps, with sample models and sync counts](docs/images/settings.png)
 
 ## What stays off GitHub
 
@@ -63,7 +63,7 @@ python3 gallery/server.py
 
 Open http://127.0.0.1:8765. It reads the folders once, when it starts. A file added after that stays invisible until you start the server again.
 
-Photos, Videos, and Faces share one dark theme. The theme choice is saved in the browser.
+Keeps uses one dark theme. The choice is saved in the browser.
 
 Search takes a sentence, and it also has filters you can edit. The Search section below has the query shapes.
 
