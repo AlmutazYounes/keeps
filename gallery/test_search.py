@@ -97,6 +97,19 @@ class ParseTests(unittest.TestCase):
         both = parsed("omar hamza and hamza")
         self.assertEqual(both["people"], ["Omar Hamza", "Hamza"])
 
+    def test_month_and_year_in_any_order(self):
+        people = [{"name": "Me", "ids": [1]}]
+        for text in ("me 2025 july", "july me 2025", "me july 2025", "2025 july me"):
+            filters = search_lib.parse_query(text, people)
+            self.assertEqual(filters["person"], "Me", text)
+            self.assertEqual((filters["year"], filters["month"], filters["day"]), (2025, 7, None), text)
+            self.assertEqual(filters["words"], [], text)
+        month_only = search_lib.parse_query("july", people)
+        self.assertEqual(month_only["month"], 7)
+        self.assertIsNone(month_only["year"])
+        day = search_lib.parse_query("2025 july 4", people)
+        self.assertEqual((day["year"], day["month"], day["day"]), (2025, 7, 4))
+
     def test_month_and_day(self):
         month = parsed("September 2025")
         self.assertEqual((month["year"], month["month"], month["day"]), (2025, 9, None))

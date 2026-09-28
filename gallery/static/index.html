@@ -402,7 +402,7 @@ try {
     <button type="button" class="ghost" data-query="me in 2025">me in 2025</button>
   </div>
   <p>Person matches a saved name, and it ignores capitalization. Me is a person here, so me finds Me.</p>
-  <p>Year, month, and day use the date stored on the item. September 2025 and Sep 25, 2025 both work.</p>
+  <p>A month, a year, and a day count wherever they sit. me 2025 july is July 2025. September 2025 and Sep 25, 2025 use the date stored on the item.</p>
   <p>Photos keeps stills. Videos keeps videos. The Photos and Videos tabs still switch the page.</p>
   <p>The other words have to appear in the caption or the file name. Short words such as wearing are skipped. A word run together, such as carseat, still matches a caption that says car seat.</p>
   <p>Videos are not given descriptions, and faces are not saved for them. A video search still limits the grid to videos. It then checks the file name, plus a caption or a face if one was saved.</p>
@@ -1157,6 +1157,82 @@ function validDate(year, month, day) {
   return probe.getUTCFullYear() === year && probe.getUTCMonth() === month - 1 && probe.getUTCDate() === day;
 }
 
+function dayNumber(word) {
+  const ordinal = /^(\d{1,2})(?:st|nd|rd|th)$/.exec(word);
+  const raw = ordinal ? ordinal[1] : (word.length <= 2 && /^\d+$/.test(word) ? word : "");
+  if (!raw) return null;
+  const number = Number(raw);
+  if (number < 1 || number > 31) return null;
+  return number;
+}
+
+function beside(text, left, right) {
+  const first = left.start <= right.start ? left : right;
+  const second = left.start <= right.start ? right : left;
+  return !/[a-z0-9]/.test(text.slice(first.end, second.start));
+}
+
+function readDate(lower, consumed) {
+  const patterns = [
+    { re: new RegExp("\\b(" + MONTH_ALT + ")\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s*,?\\s*(20\\d{2})\\b", "g"), kind: "mdy" },
+    { re: new RegExp("\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(" + MONTH_ALT + ")\\s+(20\\d{2})\\b", "g"), kind: "dmy" },
+  ];
+  for (const entry of patterns) {
+    let match;
+    while ((match = entry.re.exec(lower))) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (spanTaken(consumed, start, end)) continue;
+      const month = MONTHS[entry.kind === "mdy" ? match[1] : match[2]];
+      const day = Number(entry.kind === "mdy" ? match[2] : match[1]);
+      const year = Number(match[3]);
+      if (!validDate(year, month, day)) continue;
+      markSpan(consumed, start, end);
+      return { year, month, day };
+    }
+  }
+  const months = [];
+  const years = [];
+  const days = [];
+  const wordRe = /[a-z0-9]+/g;
+  let match;
+  while ((match = wordRe.exec(lower))) {
+    const end = match.index + match[0].length;
+    if (spanTaken(consumed, match.index, end)) continue;
+    const word = match[0];
+    if (MONTHS[word]) {
+      months.push({ start: match.index, end, value: MONTHS[word] });
+      continue;
+    }
+    if (/^20\d{2}$/.test(word)) {
+      const year = Number(word);
+      if (year >= YEAR_MIN && year <= YEAR_MAX) years.push({ start: match.index, end, value: year });
+      continue;
+    }
+    const day = dayNumber(word);
+    if (day != null) days.push({ start: match.index, end, value: day });
+  }
+  if (!months.length && !years.length) return { year: null, month: null, day: null };
+  const monthHit = months[0] || null;
+  const yearHit = years[0] || null;
+  let dayHit = null;
+  let rejectedDay = null;
+  if (monthHit) {
+    const candidate = days.find((item) => beside(lower, monthHit, item)) || null;
+    if (candidate && validDate(yearHit ? yearHit.value : 2024, monthHit.value, candidate.value)) dayHit = candidate;
+    else rejectedDay = candidate;
+  }
+  if (monthHit) markSpan(consumed, monthHit.start, monthHit.end);
+  if (yearHit) markSpan(consumed, yearHit.start, yearHit.end);
+  if (dayHit) markSpan(consumed, dayHit.start, dayHit.end);
+  if (rejectedDay) markSpan(consumed, rejectedDay.start, rejectedDay.end);
+  return {
+    year: yearHit ? yearHit.value : null,
+    month: monthHit ? monthHit.value : null,
+    day: dayHit ? dayHit.value : null,
+  };
+}
+
 function parseQuery(text, people) {
   const lower = String(text || "").toLowerCase();
   const consumed = new Array(lower.length).fill(false);
@@ -1174,49 +1250,10 @@ function parseQuery(text, people) {
   });
   found.sort((a, b) => a.at - b.at);
   const matched = found.map((item) => item.name);
-  let year = null;
-  let month = null;
-  let day = null;
-  let dated = false;
-  [
-    { re: new RegExp("\\b(" + MONTH_ALT + ")\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s*,?\\s*(20\\d{2})\\b", "g"), kind: "mdy" },
-    { re: new RegExp("\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(" + MONTH_ALT + ")\\s+(20\\d{2})\\b", "g"), kind: "dmy" },
-    { re: new RegExp("\\b(" + MONTH_ALT + ")\\s+(20\\d{2})\\b", "g"), kind: "my" },
-    { re: new RegExp("\\b(?:in|from|during)\\s+(20\\d{2})\\b", "g"), kind: "y" },
-    { re: new RegExp("\\b(20\\d{2})\\b", "g"), kind: "bare" },
-  ].forEach((entry) => {
-    if (dated) return;
-    let match;
-    while ((match = entry.re.exec(lower))) {
-      const start = match.index;
-      const end = start + match[0].length;
-      if (spanTaken(consumed, start, end)) continue;
-      let y;
-      let m = null;
-      let d = null;
-      if (entry.kind === "mdy") {
-        m = MONTHS[match[1]];
-        d = Number(match[2]);
-        y = Number(match[3]);
-      } else if (entry.kind === "dmy") {
-        d = Number(match[1]);
-        m = MONTHS[match[2]];
-        y = Number(match[3]);
-      } else if (entry.kind === "my") {
-        m = MONTHS[match[1]];
-        y = Number(match[2]);
-      } else {
-        y = Number(match[1]);
-      }
-      if (!validDate(y, m, d)) continue;
-      markSpan(consumed, start, end);
-      year = y;
-      month = m;
-      day = d;
-      dated = true;
-      break;
-    }
-  });
+  const when = readDate(lower, consumed);
+  const year = when.year;
+  const month = when.month;
+  const day = when.day;
   let kind = "";
   const mediaSpans = [];
   const wordRe = /[a-z0-9]+/g;

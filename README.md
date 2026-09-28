@@ -74,6 +74,7 @@ Type a sentence in the search box. The gallery reads a saved person, a year or a
 - `alex in a carseat video` keeps videos of Alex whose file name or caption mentions a car seat.
 - `sam wearing yellow` keeps Sam where the caption or the file name mentions yellow. The word wearing is ignored.
 - `sam in 2025` keeps Sam in 2025.
+- `sam 2025 july` keeps Sam in July 2025. The month, year, and day can sit in any order.
 - `September 2025` and `Sep 25, 2025` use the date stored on the item.
 
 A saved name matches without caring about capitalization. That includes a person whose name is an ordinary English word.
