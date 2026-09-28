@@ -80,6 +80,10 @@ A saved name matches without caring about capitalization. That includes a person
 
 Videos are not given descriptions, and faces are not saved for them. A video search still limits the grid to videos. It then checks the file name, plus a caption or a face if one was already saved.
 
+## Select
+
+Choose Select, then tap photos or videos. Share sends those files to the system share sheet. Delete asks first, then moves the files to Trash and takes them off the grid. The open photo has the same two actions.
+
 ## Faces
 
 Two ONNX files have to sit in `gallery/models/` before the face index will run:
