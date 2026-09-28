@@ -11,4 +11,5 @@ gallery/.venv/
 gallery/cache/
 gallery/faces/
 gallery/captions/
+gallery/jobs/
 gallery/models/

@@ -10,6 +10,7 @@ import numpy as np
 
 import faces_db
 import faces_lib as F
+import jobs_db
 
 IMAGE_EXT = {
     ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
@@ -103,8 +104,10 @@ def main():
     if not pending:
         faces_db.export_metadata(conn)
         conn.close()
+        jobs_db.beat("faces", "Saved in the database. Nothing new to scan.", state="idle")
         print("Nothing left to scan.", flush=True)
         return
+    jobs_db.beat("faces", f"{len(pending)} photos are not in the database yet.")
 
     det = F.session(F.DET_PATH)
     rec = F.session(F.REC_PATH)
@@ -170,6 +173,11 @@ def main():
             elapsed = time.time() - started
             rate = index / elapsed if elapsed else 0
             left = (len(pending) - index) / rate if rate else 0
+            note = (
+                f"{index}/{len(pending)} new photos. "
+                f"{rate:.1f}/s. About {left/60:.0f} min left."
+            )
+            jobs_db.beat("faces", note)
             print(
                 f"{index}/{len(pending)}  new_faces={new_faces}  "
                 f"{rate:.1f}/s  about {left/60:.0f} min left",
@@ -187,6 +195,11 @@ def main():
     faces_db.export_metadata(conn)
     people = conn.execute("SELECT COUNT(*) FROM people").fetchone()[0]
     conn.close()
+    jobs_db.beat(
+        "faces",
+        f"Saved in the database. {new_faces} new faces this run.",
+        state="idle",
+    )
     print(f"Done. {new_faces} new faces. {people} people total.", flush=True)
 
 

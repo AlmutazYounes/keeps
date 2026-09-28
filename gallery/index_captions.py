@@ -7,6 +7,7 @@ from pathlib import Path
 
 import caption_lib as C
 import captions_db
+import jobs_db
 
 IMAGE_EXT = {
     ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
@@ -52,9 +53,11 @@ def main():
     )
     if not pending:
         conn.close()
+        jobs_db.beat("captions", "Saved in the database. Nothing new to describe.", state="idle")
         print("Nothing left to describe.", flush=True)
         return
 
+    jobs_db.beat("captions", f"{len(pending)} photos are not in the database yet.")
     captioner = C.Captioner()
     started = time.time()
     for index, (mtime, path, rel) in enumerate(pending, start=1):
@@ -82,12 +85,17 @@ def main():
             rate = index / elapsed if elapsed else 0
             left = (len(pending) - index) / rate if rate else 0
             sample = text[:90]
+            jobs_db.beat(
+                "captions",
+                f"{index}/{len(pending)} new photos. {rate:.2f}/s. About {left/60:.0f} min left.",
+            )
             print(
                 f"{index}/{len(pending)}  {rate:.2f}/s  about {left/60:.0f} min left  {sample}",
                 flush=True,
             )
     conn.commit()
     conn.close()
+    jobs_db.beat("captions", "Saved in the database. Nothing new to describe.", state="idle")
     print("Done.", flush=True)
 
 
