@@ -14,6 +14,30 @@ def photo_file(root, rel):
     return path
 
 
+def add_photo(library, photo):
+    by_id = library["by_id"]
+    next_id = max(by_id, default=0) + 1
+    stored = dict(photo)
+    stored["id"] = next_id
+    by_id[next_id] = stored
+    item = [next_id, stored["name"], stored["kind"], stored.get("date") or ""]
+    placed = False
+    for group in library["groups"]:
+        if group["year"] == stored["year"] and group["month"] == stored["month"]:
+            group["items"].insert(0, item)
+            placed = True
+            break
+    if not placed:
+        library["groups"].insert(0, {
+            "year": stored["year"],
+            "month": stored["month"],
+            "label": stored.get("label") or stored["month"],
+            "items": [item],
+        })
+    library["count"] = len(by_id)
+    return stored
+
+
 def drop_photos(library, ids):
     wanted = set()
     for value in ids:

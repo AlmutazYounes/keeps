@@ -60,6 +60,20 @@ class FaceNameTests(unittest.TestCase):
             conn.close()
         self.assertEqual(name, "")
 
+    def test_a_manual_face_is_stored_without_a_picture_change(self):
+        record = faces_db.add_face("2024/07-July/one.jpg", (0.2, 0.2, 0.5, 0.6), "Sam")
+        self.assertEqual(record["merged_into"], 1)
+        self.assertEqual(record["person_id"], 1)
+        conn = faces_db.connect()
+        try:
+            row = conn.execute(
+                "SELECT relpath, x1, y1, x2, y2, person_id FROM faces WHERE id = ?",
+                (record["face_id"],),
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(row, ("2024/07-July/one.jpg", 0.2, 0.2, 0.5, 0.6, 1))
+
 
 if __name__ == "__main__":
     unittest.main()

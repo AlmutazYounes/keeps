@@ -91,6 +91,8 @@ Videos are not given descriptions, and faces are not saved for them. A video sea
 
 Choose Select, then tap photos or videos. Share sends those files to the system share sheet. Delete asks first, then moves the files to Trash and takes them off the grid. The open photo has the same two actions.
 
+The open photo keeps Share, Delete, Info, and Close in one bar, with the file name. Rotate, straighten, and crop are for still photos. Save a copy writes a new file and leaves the original alone. Save asks first, then replaces the original. Add face stores a box for someone the detector missed. That box does not change the photo file. The new face shows on the Faces page once it meets the same 10 photo rule.
+
 Review is a dashboard for photos that look disposable. You start the check. It looks at the picture, then lists the strongest matches with a reason. Careful, balanced, and aggressive change which photos appear. A careful pass leaves named people off the list. Nothing is deleted until you choose Delete.
 
 ## Categories

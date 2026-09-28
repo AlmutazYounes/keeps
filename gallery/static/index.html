@@ -289,14 +289,22 @@ try {
   }
   body.selecting #selectbar { display: flex; }
   #select-count { font-size: 14px; font-weight: 600; white-space: nowrap; margin-right: 6px; }
-  #lb-share, #lb-delete {
-    position: absolute; top: 12px; z-index: 2;
+  #lb-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 4;
+    height: 56px; display: flex; align-items: center; gap: 12px;
+    padding: 0 12px 0 16px; background: #000;
+  }
+  #lb-name {
+    flex: 1; min-width: 0; font-size: 14px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #lb-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+  #lb-actions button, #lb-tools button {
     border: 0; border-radius: 999px;
     background: rgba(255,255,255,.12); color: #fff;
-    height: 40px; padding: 0 14px; font: inherit; font-size: 14px; cursor: pointer;
+    height: 36px; padding: 0 12px; font: inherit; font-size: 14px; cursor: pointer;
   }
-  #lb-share { left: 16px; }
-  #lb-delete { left: 92px; }
+  #lb-actions button:disabled, #lb-tools button:disabled { opacity: .45; cursor: default; }
   .badge {
     position: absolute; left: 8px; bottom: 8px;
     width: 26px; height: 26px; border-radius: 50%;
@@ -315,32 +323,62 @@ try {
     display: none;
   }
   #lb.open { display: block; }
+  #lb { overflow: hidden; }
   #lb-stage {
-    position: absolute; inset: 56px 72px 64px;
+    position: absolute; top: 56px; right: 72px; bottom: 64px; left: 72px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  #lb.still #lb-stage { bottom: 112px; }
+  #lb-media {
+    width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
   }
-  #lb-stage img, #lb-stage video { max-width: 100%; max-height: 100%; }
-  #lb-caption {
-    position: absolute; left: 20px; right: 20px; bottom: 16px;
-    text-align: center; font-size: 14px; color: #e8eaed;
+  #lb-media img, #lb-media video {
+    max-width: 100%; max-height: 100%;
+    width: auto; height: auto; object-fit: contain;
   }
-  #lb-close, #lb-prev, #lb-next {
-    position: absolute; z-index: 2;
+  #lb-box {
+    position: absolute; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.45);
+    pointer-events: none;
+  }
+  #lb-caption {
+    position: absolute; left: 88px; right: 88px; bottom: 64px;
+    text-align: center; font-size: 14px; color: #e8eaed;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #lb.still #lb-caption { bottom: 112px; }
+  #lb-tools {
+    display: none;
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
+    height: 56px; align-items: center; justify-content: center; gap: 8px;
+    padding: 0 16px; background: #000;
+  }
+  #lb.still #lb-tools { display: flex; }
+  #lb-tools label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #e8eaed; }
+  #lb-tools input[type="range"] { width: 88px; }
+  #lb-face-name {
+    height: 36px; width: 140px; border: 0; border-radius: 999px;
+    background: rgba(255,255,255,.12); color: #fff; padding: 0 12px; font: inherit; font-size: 14px;
+  }
+  #lb-note { font-size: 13px; color: #e8eaed; max-width: 220px; }
+  #lb-prev, #lb-next {
+    position: absolute; top: 50%; z-index: 3;
     border: 0; background: rgba(255,255,255,.12); color: #fff;
     width: 40px; height: 40px; border-radius: 50%;
     font-size: 20px; cursor: pointer;
+    transform: translateY(-50%);
   }
-  #lb-close { top: 12px; right: 12px; }
-  #lb-info { top: 12px; right: 60px; display: flex; align-items: center; justify-content: center; }
-  #lb-prev { top: 50%; left: 16px; transform: translateY(-50%); }
-  #lb-next { top: 50%; right: 16px; transform: translateY(-50%); }
+  #lb-prev { left: 16px; }
+  #lb-next { right: 16px; }
+  #lb-close, #lb-info { width: 36px; padding: 0; display: flex; align-items: center; justify-content: center; }
   #lb.info-open #lb-stage { right: 452px; }
   #lb.info-open #lb-caption { right: 400px; }
-  #lb.info-open #lb-next, #lb.info-open #lb-close { right: 396px; }
-  #lb.info-open #lb-info { display: none; }
+  #lb.info-open #lb-next { right: 396px; }
+  #lb.info-open #lb-tools { right: 380px; }
   #info {
     display: none;
-    position: absolute; top: 0; right: 0; bottom: 0; z-index: 3;
+    position: absolute; top: 56px; right: 0; bottom: 0; z-index: 3;
     width: 380px; overflow: auto;
     background: #1c1c1e; color: #f1f3f4;
     padding: 8px 22px 32px;
@@ -471,20 +509,45 @@ try {
   <button id="select-cancel" class="nav" type="button">Cancel</button>
 </div>
 <div id="lb">
-  <button id="lb-close" type="button" aria-label="Close">×</button>
-  <button id="lb-share" type="button">Share</button>
-  <button id="lb-delete" type="button">Delete</button>
-  <button id="lb-info" type="button" aria-label="Info">
-    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"></circle>
-      <path d="M12 11v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
-      <circle cx="12" cy="8" r="1.1" fill="currentColor"></circle>
-    </svg>
-  </button>
+  <div id="lb-bar">
+    <div id="lb-name"></div>
+    <div id="lb-actions">
+      <button id="lb-share" type="button">Share</button>
+      <button id="lb-delete" type="button">Delete</button>
+      <button id="lb-info" type="button" aria-label="Info">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"></circle>
+          <path d="M12 11v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+          <circle cx="12" cy="8" r="1.1" fill="currentColor"></circle>
+        </svg>
+      </button>
+      <button id="lb-close" type="button" aria-label="Close">×</button>
+    </div>
+  </div>
   <button id="lb-prev" type="button" aria-label="Previous">‹</button>
   <button id="lb-next" type="button" aria-label="Next">›</button>
-  <div id="lb-stage"></div>
+  <div id="lb-stage">
+    <div id="lb-media"></div>
+    <div id="lb-box" hidden></div>
+  </div>
   <div id="lb-caption"></div>
+  <div id="lb-tools">
+    <button id="lb-left" type="button">Rotate left</button>
+    <button id="lb-right" type="button">Rotate right</button>
+    <label>Straighten
+      <input id="lb-tilt" type="range" min="-15" max="15" step="0.5" value="0" aria-label="Straighten">
+      <span id="lb-tilt-value">0</span>
+    </label>
+    <button id="lb-crop" type="button" aria-pressed="false">Crop</button>
+    <button id="lb-face" type="button">Add face</button>
+    <button id="lb-reset" type="button" hidden>Reset</button>
+    <button id="lb-copy" type="button" hidden>Save a copy</button>
+    <button id="lb-replace" type="button" hidden>Save</button>
+    <input id="lb-face-name" type="text" placeholder="Name" maxlength="80" autocomplete="off" hidden>
+    <button id="lb-face-save" type="button" hidden>Save face</button>
+    <button id="lb-tool-cancel" type="button" hidden>Cancel</button>
+    <span id="lb-note"></span>
+  </div>
   <aside id="info"></aside>
 </div>
 <script>
@@ -507,7 +570,11 @@ const emptyEl = document.getElementById("empty");
 const statusEl = document.getElementById("status");
 const lb = document.getElementById("lb");
 const lbStage = document.getElementById("lb-stage");
+const lbMedia = document.getElementById("lb-media");
+const lbBox = document.getElementById("lb-box");
 const lbCaption = document.getElementById("lb-caption");
+const lbName = document.getElementById("lb-name");
+const lbNote = document.getElementById("lb-note");
 const infoEl = document.getElementById("info");
 
 let captionById = {};
@@ -885,31 +952,203 @@ function openInfo() {
   loadInfo(flat[openIndex].item[0]);
 }
 
+const edit = { turns: 0, straighten: 0, crop: null };
+let tool = "";
+let draw = null;
+
+function editDirty() {
+  return edit.turns !== 0 || edit.straighten !== 0 || edit.crop !== null;
+}
+
+function resetEdit() {
+  edit.turns = 0;
+  edit.straighten = 0;
+  edit.crop = null;
+  edit.faceBox = null;
+  tool = "";
+  draw = null;
+  const tilt = document.getElementById("lb-tilt");
+  if (tilt) tilt.value = "0";
+  document.getElementById("lb-tilt-value").textContent = "0";
+  lbBox.hidden = true;
+  lbNote.textContent = "";
+  paintTools();
+  fitEdit();
+}
+
+function paintTools() {
+  const dirty = editDirty();
+  const face = tool === "face";
+  document.getElementById("lb-reset").hidden = !dirty || face;
+  document.getElementById("lb-copy").hidden = !dirty || face;
+  document.getElementById("lb-replace").hidden = !dirty || face;
+  document.getElementById("lb-face-name").hidden = !face;
+  document.getElementById("lb-face-save").hidden = !face;
+  document.getElementById("lb-tool-cancel").hidden = !tool;
+  document.getElementById("lb-crop").setAttribute("aria-pressed", tool === "crop" ? "true" : "false");
+  ["lb-left", "lb-right", "lb-crop", "lb-face", "lb-tilt"].forEach((id) => {
+    document.getElementById(id).disabled = face;
+  });
+}
+
+function fitEdit() {
+  const img = lbMedia.querySelector("img");
+  if (!img) return;
+  const deg = edit.turns * 90 + edit.straighten;
+  const swapped = edit.turns % 2 === 1;
+  let scale = 1;
+  if (swapped && img.offsetWidth && img.offsetHeight) {
+    const bounds = lbStage.getBoundingClientRect();
+    scale = Math.min(bounds.width / img.offsetHeight, bounds.height / img.offsetWidth, 1);
+  }
+  img.style.transform = "rotate(" + deg + "deg) scale(" + scale + ")";
+}
+
+function currentItem() {
+  if (openIndex < 0) return null;
+  return flat[openIndex].item;
+}
+
 function openAt(id) {
   const index = flat.findIndex((entry) => entry.item[0] === id);
   if (index < 0) return;
   openIndex = index;
-  const entry = flat[index];
-  const item = entry.item;
+  const item = flat[index].item;
   lb.classList.add("open");
-  lbCaption.textContent = item[1];
+  lb.classList.toggle("still", item[2] !== "video");
+  lbName.textContent = item[1];
+  lbCaption.textContent = captionById[item[0]] || "";
+  resetEdit();
   if (item[2] === "video") {
-    lbStage.innerHTML = `<video src="${sourceFor(item, true)}" controls autoplay></video>`;
+    lbMedia.innerHTML = `<video src="${sourceFor(item, true)}" controls autoplay></video>`;
   } else {
-    lbStage.innerHTML = `<img src="${sourceFor(item, true)}" alt="">`;
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = sourceFor(item, true);
+    img.addEventListener("load", fitEdit);
+    lbMedia.replaceChildren(img);
   }
   if (lb.classList.contains("info-open")) loadInfo(item[0]);
+}
+
+function insertCopy(data) {
+  const openId = currentItem() ? currentItem()[0] : 0;
+  let group = allGroups.find((entry) => entry.year === data.year && entry.month === data.month);
+  if (!group) {
+    group = { year: data.year, month: data.month, label: data.label, items: [] };
+    allGroups.unshift(group);
+  }
+  group.items.unshift(data.item);
+  applyView();
+  const index = flat.findIndex((entry) => entry.item[0] === openId);
+  if (index >= 0) openIndex = index;
+}
+
+function postEdit(mode) {
+  const item = currentItem();
+  if (!item || !editDirty()) return;
+  if (mode === "replace" && !window.confirm("Replace this photo? This overwrites the original file.")) return;
+  lbNote.textContent = "Saving";
+  document.getElementById("lb-copy").disabled = true;
+  document.getElementById("lb-replace").disabled = true;
+  fetch("/api/edit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: item[0],
+      mode: mode,
+      turns: edit.turns,
+      straighten: edit.straighten,
+      crop: edit.crop,
+    }),
+  }).then((response) => {
+    if (!response.ok) throw new Error("save failed");
+    return response.json();
+  }).then((data) => {
+    if (!data.replaced) insertCopy(data);
+    const stamp = "?v=" + Date.now();
+    resetEdit();
+    if (data.replaced) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = sourceFor(item, true) + stamp;
+      img.addEventListener("load", fitEdit);
+      lbMedia.replaceChildren(img);
+      lbNote.textContent = "Saved";
+    } else {
+      lbNote.textContent = "Saved a copy";
+    }
+  }).catch(() => {
+    paintTools();
+    lbNote.textContent = "Couldn't save that photo.";
+  });
+}
+
+function saveFace() {
+  const item = currentItem();
+  if (!item || !edit.faceBox) {
+    lbNote.textContent = "Draw a box around the face first.";
+    return;
+  }
+  const name = document.getElementById("lb-face-name").value.trim();
+  lbNote.textContent = "Saving";
+  document.getElementById("lb-face-save").disabled = true;
+  fetch("/api/faces", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: item[0], name: name, box: edit.faceBox }),
+  }).then((response) => {
+    if (!response.ok) throw new Error("save failed");
+    return response.json();
+  }).then((data) => {
+    tool = "";
+    edit.faceBox = null;
+    lbBox.hidden = true;
+    paintTools();
+    lbNote.textContent = data.merged_into
+      ? "That name already existed, so this face joined that person."
+      : "Saved that face.";
+    if (lb.classList.contains("info-open")) loadInfo(item[0]);
+  }).catch(() => {
+    paintTools();
+    lbNote.textContent = "Couldn't save that face.";
+  });
+}
+
+function fractionBox(start, now) {
+  const x = Math.min(start.x, now.x);
+  const y = Math.min(start.y, now.y);
+  return { x: x, y: y, w: Math.abs(now.x - start.x), h: Math.abs(now.y - start.y) };
+}
+
+function imageBounds() {
+  const img = lbMedia.querySelector("img");
+  if (!img) return null;
+  const rect = img.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  return rect;
+}
+
+function showFraction(box, rect) {
+  const stage = lbStage.getBoundingClientRect();
+  lbBox.hidden = false;
+  lbBox.style.left = (rect.left - stage.left + box.x * rect.width) + "px";
+  lbBox.style.top = (rect.top - stage.top + box.y * rect.height) + "px";
+  lbBox.style.width = (box.w * rect.width) + "px";
+  lbBox.style.height = (box.h * rect.height) + "px";
 }
 
 function closeLb() {
   lb.classList.remove("open");
   closeInfo();
-  lbStage.innerHTML = "";
+  lbMedia.replaceChildren();
+  resetEdit();
   openIndex = -1;
 }
 
 function step(delta) {
   if (openIndex < 0) return;
+  if (editDirty() && !window.confirm("Leave this photo without saving the edit?")) return;
   const next = openIndex + delta;
   if (next < 0 || next >= flat.length) return;
   openAt(flat[next].item[0]);
@@ -1071,12 +1310,111 @@ document.getElementById("lb-close").addEventListener("click", closeLb);
 document.getElementById("lb-info").addEventListener("click", openInfo);
 document.getElementById("lb-prev").addEventListener("click", () => step(-1));
 document.getElementById("lb-next").addEventListener("click", () => step(1));
+document.getElementById("lb-left").addEventListener("click", () => {
+  edit.turns = (edit.turns + 3) % 4;
+  edit.crop = null;
+  lbBox.hidden = true;
+  paintTools();
+  fitEdit();
+});
+document.getElementById("lb-right").addEventListener("click", () => {
+  edit.turns = (edit.turns + 1) % 4;
+  edit.crop = null;
+  lbBox.hidden = true;
+  paintTools();
+  fitEdit();
+});
+document.getElementById("lb-tilt").addEventListener("input", () => {
+  edit.straighten = Number(document.getElementById("lb-tilt").value);
+  document.getElementById("lb-tilt-value").textContent = String(edit.straighten);
+  edit.crop = null;
+  lbBox.hidden = true;
+  paintTools();
+  fitEdit();
+});
+document.getElementById("lb-crop").addEventListener("click", () => {
+  tool = tool === "crop" ? "" : "crop";
+  paintTools();
+});
+document.getElementById("lb-face").addEventListener("click", () => {
+  if (editDirty()) {
+    lbNote.textContent = "Save or reset the edit before adding a face.";
+    return;
+  }
+  tool = "face";
+  edit.faceBox = null;
+  lbBox.hidden = true;
+  document.getElementById("lb-face-name").value = "";
+  paintTools();
+});
+document.getElementById("lb-reset").addEventListener("click", resetEdit);
+document.getElementById("lb-copy").addEventListener("click", () => postEdit("copy"));
+document.getElementById("lb-replace").addEventListener("click", () => postEdit("replace"));
+document.getElementById("lb-face-save").addEventListener("click", saveFace);
+document.getElementById("lb-tool-cancel").addEventListener("click", () => {
+  tool = "";
+  edit.faceBox = null;
+  if (!edit.crop) lbBox.hidden = true;
+  paintTools();
+});
+lbStage.addEventListener("pointerdown", (event) => {
+  if (tool !== "crop" && tool !== "face") return;
+  if (event.target.closest("video")) return;
+  const rect = imageBounds();
+  if (!rect) return;
+  const x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+  const y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+  draw = { x: x, y: y };
+  lbStage.setPointerCapture(event.pointerId);
+});
+lbStage.addEventListener("pointermove", (event) => {
+  if (!draw) return;
+  const rect = imageBounds();
+  if (!rect) return;
+  const now = {
+    x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+    y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+  };
+  showFraction(fractionBox(draw, now), rect);
+});
+lbStage.addEventListener("pointerup", (event) => {
+  if (!draw) return;
+  const rect = imageBounds();
+  const now = rect ? {
+    x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+    y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+  } : draw;
+  const box = fractionBox(draw, now);
+  draw = null;
+  if (!rect || box.w < 0.02 || box.h < 0.02) {
+    lbBox.hidden = true;
+    return;
+  }
+  if (tool === "crop") edit.crop = box;
+  else edit.faceBox = box;
+  showFraction(box, rect);
+  paintTools();
+});
 lb.addEventListener("click", (event) => {
   if (event.target === lb) closeLb();
 });
 document.addEventListener("keydown", (event) => {
+  if (event.target.closest("#lb-tools")) {
+    if (event.key === "Escape") {
+      tool = "";
+      edit.faceBox = null;
+      if (!edit.crop) lbBox.hidden = true;
+      paintTools();
+    }
+    return;
+  }
   if (event.key === "Escape") {
-    if (lb.classList.contains("info-open")) closeInfo();
+    if (tool) {
+      tool = "";
+      edit.faceBox = null;
+      if (!edit.crop) lbBox.hidden = true;
+      paintTools();
+    } else if (lb.classList.contains("info-open")) closeInfo();
     else if (lb.classList.contains("open")) closeLb();
     else if (helpOpen) closeHelp();
     return;
