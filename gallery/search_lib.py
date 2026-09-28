@@ -46,6 +46,12 @@ CATEGORY_WORDS = {
     "screenshots": "screenshot",
     "document": "document",
     "documents": "document",
+    "animal": "animal",
+    "animals": "animal",
+    "food": "food",
+    "nature": "nature",
+    "vehicle": "vehicle",
+    "vehicles": "vehicle",
 }
 
 TOKEN_RE = re.compile(r"[a-z0-9]+")

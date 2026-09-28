@@ -425,7 +425,7 @@ try {
   </div>
   <p>Person matches a saved name, and it ignores capitalization. Me is a person here, so me finds Me.</p>
   <p>A month, a year, and a day count wherever they sit. me 2025 july is July 2025. September 2025 and Sep 25, 2025 use the date stored on the item.</p>
-  <p>screenshots from 2024 and documents in 2025 keep that kind of photo. A place name works like a person name. A photo with no description is not treated as a screenshot or a document.</p>
+  <p>screenshots from 2024 and documents in 2025 keep that kind of photo. animals, food, nature, and vehicles work the same way. A place name works like a person name. A photo with no description is not treated as one of these kinds.</p>
   <p>Photos keeps stills. Videos keeps videos. The Photos and Videos tabs still switch the page.</p>
   <p>The other words have to appear in the caption or the file name. Short words such as wearing are skipped. A word run together, such as carseat, still matches a caption that says car seat.</p>
   <p>Videos are not given descriptions, and faces are not saved for them. A video search still limits the grid to videos. It then checks the file name, plus a caption or a face if one was saved.</p>
@@ -1199,7 +1199,18 @@ const MONTHS = {
 const MONTH_LABELS = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const STOPWORDS = new Set(["a", "an", "the", "in", "on", "at", "of", "for", "to", "and", "or", "with", "from", "by", "as", "is", "it", "my", "our", "their", "this", "that", "these", "those", "into", "onto", "during", "some", "just", "very", "wearing", "wear", "wears", "wore", "be", "was", "were", "am", "are", "his", "her", "its", "me"]);
 const VIDEO_WORDS = new Set(["video", "videos"]);
-const CATEGORY_WORDS = { screenshot: "screenshot", screenshots: "screenshot", document: "document", documents: "document" };
+const CATEGORY_WORDS = {
+  screenshot: "screenshot", screenshots: "screenshot",
+  document: "document", documents: "document",
+  animal: "animal", animals: "animal",
+  food: "food",
+  nature: "nature",
+  vehicle: "vehicle", vehicles: "vehicle",
+};
+const CATEGORY_LABELS = {
+  screenshot: "Screenshots", document: "Documents", animal: "Animals",
+  food: "Food", nature: "Nature", vehicle: "Vehicles",
+};
 const PHOTO_WORDS = new Set(["photo", "photos", "picture", "pictures"]);
 const helpBtn = document.getElementById("search-help");
 const helpPanel = document.getElementById("search-help-panel");
@@ -1218,9 +1229,7 @@ let categoriesLoaded = false;
 const startParams = new URLSearchParams(location.search);
 function normCategory(value) {
   const word = String(value || "").toLowerCase();
-  if (word === "screenshot" || word === "screenshots") return "screenshot";
-  if (word === "document" || word === "documents") return "document";
-  return "";
+  return CATEGORY_WORDS[word] || "";
 }
 let pinnedCategory = normCategory(startParams.get("category"));
 let pinnedPlace = startParams.get("place") || "";
@@ -1606,8 +1615,7 @@ function paintFilters() {
   yearSel.innerHTML = '<option value="">Any year</option>' + years.map((year) => `<option value="${year}">${year}</option>`).join("");
   yearSel.value = filters.year ? String(filters.year) : "";
   const scopeBits = [];
-  if (activeCategory() === "screenshot") scopeBits.push("Screenshots");
-  if (activeCategory() === "document") scopeBits.push("Documents");
+  if (CATEGORY_LABELS[activeCategory()]) scopeBits.push(CATEGORY_LABELS[activeCategory()]);
   if (activePlace()) scopeBits.push(activePlace());
   if (scopeBits.length) {
     scopeBtn.hidden = false;

@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Categories</title>
+<link rel="stylesheet" href="/vendor/leaflet.css">
+<script src="/vendor/leaflet.js"></script>
+<script src="/vendor/leaflet-heat.js"></script>
 <script>
 try {
   if (localStorage.getItem("photos-theme") !== "light") document.documentElement.classList.add("dark");
@@ -52,6 +55,11 @@ try {
   .card span { margin-top: 2px; color: var(--muted); font-size: 12px; }
   .card:hover strong { text-decoration: underline; }
   .note { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+  #map {
+    height: 520px; border-radius: 16px; background: var(--tile);
+    border: 1px solid var(--line); margin-bottom: 18px;
+  }
+  .leaflet-container { font: inherit; background: var(--tile); }
 </style>
 </head>
 <body>
@@ -89,6 +97,7 @@ themeBtn.addEventListener("click", () => {
   document.documentElement.classList.toggle("dark");
   localStorage.setItem("photos-theme", document.documentElement.classList.contains("dark") ? "dark" : "light");
   paintTheme();
+  if (tileLayer) tileLayer.setUrl(tileUrl());
 });
 paintTheme();
 
@@ -110,30 +119,102 @@ function card(href, title, count, cover) {
   </a>`;
 }
 
+const KIND_CARDS = [
+  ["screenshots", "Screenshots", "screenshots"],
+  ["documents", "Documents", "documents"],
+  ["animals", "Animals", "animals"],
+  ["food", "Food", "food"],
+  ["nature", "Nature", "nature"],
+  ["vehicles", "Vehicles", "vehicles"],
+];
+
+function kmBetween(aLat, aLon, bLat, bLon) {
+  const rad = Math.PI / 180;
+  const dLat = (bLat - aLat) * rad;
+  const dLon = (bLon - aLon) * rad;
+  const arc = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(arc)));
+}
+
+function clearMap() {
+  if (!mapView) return;
+  mapView.remove();
+  mapView = null;
+  tileLayer = null;
+}
+
 function render(data) {
-  const shots = data.screenshots || { count: 0 };
-  const docs = data.documents || { count: 0 };
+  clearMap();
   const places = data.places || [];
   const named = places.filter((place) => !/^-?\d+\.\d+/.test(place.label));
-  const coords = places.filter((place) => /^-?\d+\.\d+/.test(place.label)).slice(0, 40);
-  const shown = named.concat(coords);
   const geo = data.geo || {};
   const status = geo.done
     ? ""
     : `<p class="note">Reading saved locations. ${Number(geo.scanned || 0).toLocaleString()} so far.</p>`;
+  const kindCards = KIND_CARDS.map(([key, title, query]) => {
+    const item = data[key] || { count: 0 };
+    return card("/?category=" + query, title, item.count, item.cover);
+  }).join("");
+  const namedCards = named.map((place) => card("/?place=" + encodeURIComponent(place.label), place.label, place.count, place.cover)).join("");
   main.innerHTML = `
     ${status}
     <h2>Kinds</h2>
-    <div class="grid">
-      ${card("/?category=screenshots", "Screenshots", shots.count, shots.cover)}
-      ${card("/?category=documents", "Documents", docs.count, docs.cover)}
-    </div>
+    <div class="grid">${kindCards}</div>
     <h2>Places</h2>
-    ${shown.length ? `<div class="grid">${shown.map((place) => card("/?place=" + encodeURIComponent(place.label), place.label, place.count, place.cover)).join("")}</div>` : `<p class="note">No saved locations yet.</p>`}
+    <p class="note">The heat follows how many photos were taken there. Click a spot to open those photos.</p>
+    <div id="map"></div>
+    ${namedCards ? `<div class="grid">${namedCards}</div>` : ""}
   `;
-  const total = (shots.count || 0) + (docs.count || 0) + places.reduce((sum, place) => sum + (place.count || 0), 0);
+  const total = KIND_CARDS.reduce((sum, [key]) => sum + ((data[key] && data[key].count) || 0), 0)
+    + places.reduce((sum, place) => sum + (place.count || 0), 0);
   countEl.textContent = total.toLocaleString() + " grouped";
+  drawMap(data.map || []);
   if (!geo.done) setTimeout(load, 3000);
+}
+
+let mapView = null;
+let tileLayer = null;
+
+function tileUrl() {
+  const dark = document.documentElement.classList.contains("dark");
+  return dark
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+}
+
+function drawMap(points) {
+  const node = document.getElementById("map");
+  if (!node || !window.L) return;
+  if (!points.length) {
+    node.outerHTML = `<p class="note">No saved locations yet.</p>`;
+    return;
+  }
+  mapView = L.map(node, { scrollWheelZoom: true });
+  node._galleryMap = mapView;
+  tileLayer = L.tileLayer(tileUrl(), {
+    attribution: "&copy; OpenStreetMap &copy; CARTO",
+    maxZoom: 18,
+  }).addTo(mapView);
+  const heat = points.map((point) => [point.lat, point.lon, point.count]);
+  const max = heat.reduce((top, point) => Math.max(top, point[2]), 1);
+  L.heatLayer(heat, { radius: 28, blur: 22, max: max, minOpacity: 0.35 }).addTo(mapView);
+  const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lon]));
+  mapView.fitBounds(bounds.pad(0.2));
+  mapView.on("click", (event) => {
+    const zoom = mapView.getZoom();
+    const limit = 80 / Math.pow(2, Math.max(0, zoom - 5));
+    let best = null;
+    let bestKm = Infinity;
+    points.forEach((point) => {
+      const km = kmBetween(event.latlng.lat, event.latlng.lng, point.lat, point.lon);
+      if (km < bestKm) {
+        best = point;
+        bestKm = km;
+      }
+    });
+    if (!best || bestKm > limit) return;
+    location.href = "/?place=" + encodeURIComponent(best.label);
+  });
 }
 
 function load() {

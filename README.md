@@ -78,6 +78,7 @@ Type a sentence in the search box. The gallery reads a saved person, a year or a
 - `September 2025` and `Sep 25, 2025` use the date stored on the item.
 - `screenshots from 2024` keeps screenshots from 2024.
 - `documents in 2025` keeps documents from 2025.
+- `animals in 2024`, `food`, `nature`, and `vehicles` keep those kinds of photos.
 - A place name works like a person name. `sam albany` keeps Sam in Albany when that location is saved on the photo.
 
 A photo with no description is not treated as a screenshot or a document. A photo with no location is not given a place. Videos stay out of these groups.
@@ -94,7 +95,9 @@ Review lists still photos that look disposable: a screenshot, a document, or a b
 
 ## Categories
 
-Categories gathers screenshots, documents, and places. Open a card to see that group on the photo grid. A screenshot of a map can be a screenshot and also have a place. Places come from coordinates already saved on the file. The gallery does not invent a city when those coordinates have no saved name.
+Categories gathers screenshots, documents, animals, food, nature, vehicles, and places. Open a card to see that group on the photo grid. A photo can be in more than one group. A missing description is not treated as one of these kinds.
+
+Places open on a map. The heat shows how many photos were taken in that spot. Click a spot to see those photos. Places come from coordinates already saved on the file. The gallery does not invent a city when those coordinates have no saved name.
 
 ## Faces
 
