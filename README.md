@@ -114,7 +114,7 @@ gallery/.venv/bin/pip install -r requirements.txt
 gallery/.venv/bin/python gallery/index_faces.py
 ```
 
-People in fewer than 10 photos stay off the Faces page. Giving the same name to two groups merges them into one person.
+People in fewer than 10 photos stay off the Faces page. Giving the same name to two groups merges them into one person. Hover a face and use the pen to rename it. An empty name clears it. Opening the face still shows that person's photos.
 
 Finished photos stay in the face database. A gallery restart runs this only for still photos that are not saved yet. You can also run the command above yourself. It skips paths it already finished.
 
