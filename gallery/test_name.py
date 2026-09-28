@@ -29,6 +29,8 @@ class NameTests(unittest.TestCase):
         context = (ROOT / "docs" / "context.md").read_text()
         server = (ROOT / "gallery" / "server.py").read_text()
         self.assertTrue(readme.startswith("# Keeps\n"))
+        for name in ("home.png", "faces.png", "settings.png"):
+            self.assertIn(f"docs/images/{name}", readme)
         self.assertIn("https://github.com/AlmutazYounes/keeps", context)
         self.assertIn("Keeps/1.0 (personal photo library)", server)
         self.assertNotIn("local-photos", context)

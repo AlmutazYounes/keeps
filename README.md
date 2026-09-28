@@ -1,28 +1,48 @@
 # Keeps
 
-Keeps is a private gallery for a Google Photos takeout. Photos already live in `Photos/YYYY/MM-Month/`. The site runs on your machine at http://127.0.0.1:8765.
+A private gallery for a Google Photos takeout. Photos stay in `Photos/` on your machine. The site runs at http://127.0.0.1:8765.
+
+[Run it](#run-it) · [Screenshots](#screenshots) · [Takeout](#download-a-google-takeout) · [Search](#search) · [Faces](#faces) · [Settings](#settings)
+
+## Run it
+
+The server uses only the Python standard library.
+
+```bash
+python3 gallery/server.py
+```
+
+Open http://127.0.0.1:8765. It reads `Photos/` once, when it starts. A file added after that stays invisible until you start the server again.
+
+The scripts look for the library at `/Volumes/SamsungT7/Google Photos Backup`. Change `ROOT` in each script if your copy lives somewhere else.
+
+Keeps uses one dark theme. The choice is saved in the browser.
 
 ## Screenshots
 
-These pictures use colored placeholders. They are not photos from anyone's library.
+Colored placeholders. Not photos from a real library.
 
 ### Home
 
-![Home page of Keeps, with placeholder memories, a day grid, and the date scrubber](docs/images/home.png)
+<img src="docs/images/home.png" width="880" alt="Home page of Keeps, with placeholder memories, a day grid, and the date scrubber">
 
 ### Faces
 
-![Faces page of Keeps, with placeholder people](docs/images/faces.png)
+<img src="docs/images/faces.png" width="880" alt="Faces page of Keeps, with placeholder people">
 
 ### Settings
 
-![Settings page of Keeps, with sample models and sync counts](docs/images/settings.png)
+<img src="docs/images/settings.png" width="880" alt="Settings page of Keeps, with sample models and sync counts">
 
-## What stays off GitHub
+## What you can do
 
-The pictures, the face database, the captions, the thumbnails, and the model weights are not in this repo. `.gitignore` keeps them local.
-
-The scripts look for the library at `/Volumes/SamsungT7/Google Photos Backup`. Change `ROOT` in each script if your copy lives somewhere else.
+- Browse by day, and move through years with the scrubber.
+- Search with a sentence. Keeps reads a person, a date, and photos or videos, then lets you change those filters.
+- Name people. Anyone in fewer than 10 photos stays off the Faces page.
+- Open categories. Places that already have coordinates show on a map.
+- Review photos that look disposable. Nothing is deleted until you choose Delete.
+- Select files, then share them or move them to Trash.
+- Pause, continue, or rewrite a face or description job in Settings.
 
 ## Download a Google Takeout
 
@@ -35,11 +55,11 @@ Do this once, from the Google account that owns the photos.
 5. Create the export as `.zip`. Google splits a large library into several zip files.
 6. Wait for the email, then download every part.
 
-Leave the names Google gives them. They look like `takeout-20260928T120000Z-001.zip`. The sorter only sees files that match `takeout-*.zip`. If a browser renames a download, rename it back.
+Leave the names Google gives them, like `takeout-20260928T120000Z-001.zip`. The sorter only sees files that match `takeout-*.zip`. If a browser renames a download, rename it back.
 
 Put every zip in the library folder, next to `sort_photos.py`. Do not put them inside `Photos/`. Do not unzip them yourself.
 
-## Sort the Takeout
+## Sort the takeout
 
 Run this only for those zip files. Skip it when the photos are already in `Photos/`, and skip it when you add a loose file later.
 
@@ -52,20 +72,6 @@ python3 sort_photos.py
 It reads the date from the Takeout metadata, then the file name, then the file itself. It copies each photo into `Photos/YYYY/MM-Month/`. Album copies of the same photo are kept once. The original bytes are not edited.
 
 When the copy finishes, you are done with this script.
-
-## Gallery
-
-The server uses only the Python standard library.
-
-```bash
-python3 gallery/server.py
-```
-
-Open http://127.0.0.1:8765. It reads the folders once, when it starts. A file added after that stays invisible until you start the server again.
-
-Keeps uses one dark theme. The choice is saved in the browser.
-
-Search takes a sentence, and it also has filters you can edit. The Search section below has the query shapes.
 
 ## Search
 
@@ -103,12 +109,10 @@ Places open on a map. The heat shows how many photos were taken in that spot. Cl
 
 ## Faces
 
-Two ONNX files have to sit in `gallery/models/` before the face index will run:
+Two ONNX files have to sit in `gallery/models/` before the face index will run. Those weights are not shipped here.
 
 - `10g_bnkps.onnx` finds faces
 - `arcface_w600k_r50_batch.onnx` turns a face into a vector
-
-Those weights are not shipped here.
 
 ```bash
 python3 -m venv gallery/.venv
@@ -122,7 +126,7 @@ Finished photos stay in the face database. A gallery restart runs this only for 
 
 ## Descriptions
 
-Captions come from Florence-2, the ONNX build at `onnx-community/Florence-2-base-ft` on Hugging Face. Download these into `gallery/models/florence2/`:
+Captions come from Florence-2, the ONNX build at `onnx-community/Florence-2-base-ft` on Hugging Face. Download these into `gallery/models/florence2/`.
 
 - `tokenizer.json`
 - `onnx/vision_encoder_q4f16.onnx`
@@ -137,13 +141,19 @@ gallery/.venv/bin/python gallery/index_captions.py
 
 Each still photo gets a short paragraph. Search uses that text. Finished captions stay in the database. A gallery restart describes only still photos that are missing or whose file time changed. A job that is already walking does not see a file added after it made its list. Restart the gallery after that file is in `Photos/`.
 
+## Settings
+
+Open Settings to pause, continue, or rewrite a database. Pause stops a job, and a paused job stays paused across a restart. Continue picks up what is left. Rewrite clears that database and runs the model again. A face rewrite also clears names you typed.
+
+The model picker chooses the face finder, the face match model, and the description model. A job that is already running keeps the model it started with.
+
 ## New photos
 
 Do not run `sort_photos.py` for these. That script is only for a fresh `takeout-*.zip`.
 
 Face results and descriptions are saved in their databases. Stopping the gallery does not erase them, and starting it again does not repeat finished photos.
 
-On startup the server compares the folders with those databases. It runs face recognition and descriptions only for still photos that are missing or were changed. A job paused in Settings stays paused. Open Settings to pause, continue, or rewrite a database. Rewrite clears that database and runs the model again. A face rewrite also clears names you typed.
+On startup the server compares the folders with those databases. It runs face recognition and descriptions only for still photos that are missing or were changed. A job paused in Settings stays paused.
 
 1. Put the file under `Photos/`.
 2. Start `gallery/server.py` again.
@@ -151,6 +161,10 @@ On startup the server compares the folders with those databases. It runs face re
 The grid picks up the file from that scan. The two jobs then save the new photo and leave the rest alone.
 
 Videos show in the Videos tab. The face index and the caption index only read still photos.
+
+## What stays off GitHub
+
+The pictures, the face database, the captions, the thumbnails, and the model weights are not in this repo. `.gitignore` keeps them local.
 
 ## For agents
 
