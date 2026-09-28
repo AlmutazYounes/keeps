@@ -76,6 +76,16 @@ try {
   }
   #status, #note { padding: 12px 20px; color: var(--muted); }
   #status { padding-top: 40px; }
+  .bone { display: flex; flex-direction: column; align-items: center; }
+  .bone .round {
+    width: 128px; height: 128px; border-radius: 50%;
+    background: var(--tile);
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+  }
+  .bone .line {
+    width: 72px; height: 12px; margin-top: 14px; border-radius: 999px;
+    background: var(--tile);
+  }
 </style>
 </head>
 <body>
@@ -98,9 +108,22 @@ try {
   <button id="theme" class="nav" type="button">Light</button>
   <input id="filter" type="search" placeholder="Find a name" autocomplete="off">
 </header>
-<div id="status">Loading faces...</div>
+<div id="status" hidden></div>
 <p id="note" hidden></p>
-<main id="grid" hidden></main>
+<main id="grid" aria-hidden="true">
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+  <div class="bone"><span class="round"></span><span class="line"></span></div>
+</main>
 <script>
 const grid = document.getElementById("grid");
 const statusEl = document.getElementById("status");
@@ -251,8 +274,12 @@ fetch("/api/people")
   .then((response) => response.json())
   .then((data) => {
     people = data.people || [];
+    grid.removeAttribute("aria-hidden");
     countEl.textContent = people.length.toLocaleString() + " people";
     if (!people.length) {
+      grid.hidden = true;
+      grid.innerHTML = "";
+      statusEl.hidden = false;
       statusEl.textContent = "No one appears in 10 or more photos yet.";
       return;
     }
@@ -260,7 +287,11 @@ fetch("/api/people")
     grid.hidden = false;
     render(people);
   })
-  .catch(() => { statusEl.textContent = "Could not load faces."; });
+  .catch(() => {
+    grid.hidden = true;
+    statusEl.hidden = false;
+    statusEl.textContent = "Could not load faces.";
+  });
 </script>
 </body>
 </html>

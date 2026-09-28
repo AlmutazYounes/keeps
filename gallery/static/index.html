@@ -156,7 +156,6 @@ try {
   }
   body.with-highlights #scrub { top: 300px; }
   body.face-on #scrub { top: 192px; }
-  #search-help.on { background: var(--nav-on); color: var(--nav-on-ink); }
   #filterbar {
     display: none;
     position: fixed; top: 64px; left: 0; right: 0; z-index: 4;
@@ -185,25 +184,6 @@ try {
   body.with-highlights.filters-on #years { top: 300px; }
   body.with-highlights.filters-on #float { top: 354px; }
   body.with-highlights.filters-on #scroller, body.with-highlights.filters-on #scrub { top: 352px; }
-  #search-help-panel {
-    display: none;
-    position: fixed; top: 72px; right: 20px; z-index: 7;
-    width: min(440px, calc(100% - 40px));
-    max-height: min(520px, calc(100% - 96px));
-    overflow: auto;
-    background: var(--bg); color: var(--ink);
-    border: 1px solid var(--line); border-radius: 16px;
-    padding: 14px 16px 16px;
-    box-shadow: 0 12px 32px rgba(0,0,0,.28);
-  }
-  body.filters-on #search-help-panel { top: 124px; }
-  body.face-on #search-help-panel { top: 148px; }
-  body.face-on.filters-on #search-help-panel { top: 200px; }
-  body.with-highlights #search-help-panel { top: 256px; }
-  body.with-highlights.filters-on #search-help-panel { top: 308px; }
-  #search-help-panel.open { display: block; }
-  #search-help-panel p { margin: 0 0 10px; font-size: 14px; line-height: 1.45; }
-  #search-help-panel .examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
   #scrub-rail {
     position: absolute; right: 12px; top: 14px; bottom: 14px; width: 4px;
     border-radius: 4px; background: var(--rail, rgba(32,33,36,.16));
@@ -411,6 +391,18 @@ try {
   #info iframe { width: 100%; height: 190px; border: 0; border-radius: 12px; background: #111; }
   .info-note { color: #9aa0a6; font-size: 14px; }
   #status { padding: 48px 20px; color: var(--muted); }
+  #placeholders {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 3px;
+    padding: 16px;
+  }
+  #placeholders[hidden] { display: none; }
+  #placeholders span {
+    display: block; aspect-ratio: 1; border-radius: 2px;
+    background: var(--tile);
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+  }
 </style>
 </head>
 <body>
@@ -437,7 +429,6 @@ try {
   <div class="actions">
     <button id="theme" type="button">Light</button>
     <button id="select" type="button" aria-pressed="false">Select</button>
-    <button id="search-help" type="button" aria-expanded="false" aria-controls="search-help-panel">Help</button>
   </div>
   <input id="search" type="search" placeholder="Search photos" autocomplete="off">
 </header>
@@ -453,20 +444,6 @@ try {
   <button id="filter-photos" class="ghost" type="button">Photos</button>
   <button id="filter-videos" class="ghost" type="button">Videos</button>
   <input id="filter-text" type="search" placeholder="Words" aria-label="Words in the caption or file name" autocomplete="off">
-</div>
-<div id="search-help-panel">
-  <p>Type a sentence. The filters fill in from it.</p>
-  <div class="examples">
-    <button type="button" class="ghost" data-query="yara in a carseat video">yara in a carseat video</button>
-    <button type="button" class="ghost" data-query="me wearing yellow">me wearing yellow</button>
-    <button type="button" class="ghost" data-query="me in 2025">me in 2025</button>
-  </div>
-  <p>Person matches a saved name, and it ignores capitalization. Me is a person here, so me finds Me.</p>
-  <p>A month, a year, and a day count wherever they sit. me 2025 july is July 2025. September 2025 and Sep 25, 2025 use the date stored on the item.</p>
-  <p>screenshots from 2024 and documents in 2025 keep that kind of photo. animals, food, nature, and vehicles work the same way. A place name works like a person name. A photo with no description is not treated as one of these kinds.</p>
-  <p>Photos keeps stills. Videos keeps videos. The Photos and Videos tabs still switch the page.</p>
-  <p>The other words have to appear in the caption or the file name. Short words such as wearing are skipped. A word run together, such as carseat, still matches a caption that says car seat.</p>
-  <p>Videos are not given descriptions, and faces are not saved for them. A video search still limits the grid to videos. It then checks the file name, plus a caption or a face if one was saved.</p>
 </div>
 <div id="memories">
   <button id="mem-prev" class="mem-arrow" type="button" aria-label="Previous memories">
@@ -487,7 +464,13 @@ try {
 <nav id="years"></nav>
 <div id="float"></div>
 <div id="scroller">
-  <div id="status">Loading library...</div>
+  <div id="status" hidden></div>
+  <div id="placeholders" aria-hidden="true">
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
   <div id="canvas" hidden>
     <div id="spacer"></div>
     <div id="stage"></div>
@@ -568,6 +551,7 @@ const searchEl = document.getElementById("search");
 const floatEl = document.getElementById("float");
 const emptyEl = document.getElementById("empty");
 const statusEl = document.getElementById("status");
+const placeholders = document.getElementById("placeholders");
 const lb = document.getElementById("lb");
 const lbStage = document.getElementById("lb-stage");
 const lbMedia = document.getElementById("lb-media");
@@ -1416,7 +1400,6 @@ document.addEventListener("keydown", (event) => {
       paintTools();
     } else if (lb.classList.contains("info-open")) closeInfo();
     else if (lb.classList.contains("open")) closeLb();
-    else if (helpOpen) closeHelp();
     return;
   }
   if (!lb.classList.contains("open")) return;
@@ -1550,8 +1533,6 @@ const CATEGORY_LABELS = {
   food: "Food", nature: "Nature", vehicle: "Vehicles",
 };
 const PHOTO_WORDS = new Set(["photo", "photos", "picture", "pictures"]);
-const helpBtn = document.getElementById("search-help");
-const helpPanel = document.getElementById("search-help-panel");
 const personSel = document.getElementById("filter-person");
 const yearSel = document.getElementById("filter-year");
 const dateBtn = document.getElementById("filter-date");
@@ -1559,7 +1540,6 @@ const photoBtn = document.getElementById("filter-photos");
 const videoBtn = document.getElementById("filter-videos");
 const textEl = document.getElementById("filter-text");
 const scopeBtn = document.getElementById("filter-scope");
-let helpOpen = false;
 let kindsById = {};
 let placeById = {};
 let placeNames = [];
@@ -1926,7 +1906,7 @@ function filtering() {
 }
 
 function searchActive() {
-  return filtering() || helpOpen;
+  return filtering();
 }
 
 function escapeAttr(value) {
@@ -1973,16 +1953,8 @@ function paintFilters() {
   if (document.activeElement !== textEl) textEl.value = filters.text || "";
   photoBtn.classList.toggle("on", filters.kind === "photo");
   videoBtn.classList.toggle("on", filters.kind === "video" || (videosOnly && filters.kind !== "photo"));
-  helpBtn.classList.toggle("on", helpOpen);
-  helpBtn.setAttribute("aria-expanded", helpOpen ? "true" : "false");
-  helpPanel.classList.toggle("open", helpOpen);
   document.body.classList.toggle("filters-on", searchActive());
   syncing = false;
-}
-
-function closeHelp() {
-  helpOpen = false;
-  paintFilters();
 }
 
 let highlightsKey = "";
@@ -2179,28 +2151,6 @@ textEl.addEventListener("input", () => {
   scroller.scrollTop = 0;
 });
 
-helpBtn.addEventListener("click", () => {
-  helpOpen = !helpOpen;
-  paintFilters();
-});
-
-helpPanel.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-query]");
-  if (!button) return;
-  searchEl.value = button.dataset.query;
-  filters = parseQuery(searchEl.value, peopleForParse(), placeNames);
-  helpOpen = false;
-  paintFilters();
-  applyView();
-  scroller.scrollTop = 0;
-});
-
-document.addEventListener("click", (event) => {
-  if (!helpOpen) return;
-  if (event.target.closest("#search-help-panel") || event.target.closest("#search-help")) return;
-  closeHelp();
-});
-
 document.getElementById("face-clear").addEventListener("click", () => {
   facePersonId = 0;
   extraPerson = null;
@@ -2306,12 +2256,15 @@ fetch("/api/library")
   .then((data) => {
     allGroups = expandDays(data.groups);
     libraryReady = true;
+    placeholders.hidden = true;
     statusEl.hidden = true;
     countEl.textContent = data.count.toLocaleString() + " items";
     paintFilters();
     applyView();
   })
   .catch(() => {
+    placeholders.hidden = true;
+    statusEl.hidden = false;
     statusEl.textContent = "Could not load the library.";
   });
 </script>

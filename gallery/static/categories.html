@@ -55,6 +55,16 @@ try {
   .card span { margin-top: 2px; color: var(--muted); font-size: 12px; }
   .card:hover strong { text-decoration: underline; }
   .note { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+  .bone { display: flex; flex-direction: column; }
+  .bone .block {
+    width: 100%; aspect-ratio: 1; border-radius: 12px;
+    background: var(--tile);
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+  }
+  .bone .line {
+    width: 64%; height: 12px; margin-top: 10px; border-radius: 999px;
+    background: var(--tile);
+  }
   #map {
     height: 520px; border-radius: 16px; background: var(--tile);
     border: 1px solid var(--line); margin-bottom: 18px;
@@ -81,8 +91,15 @@ try {
   <div id="count"></div>
   <button id="theme" class="nav" type="button">Light</button>
 </header>
-<main id="main">
-  <p class="note" id="status">Loading categories...</p>
+<main id="main" aria-hidden="true">
+  <div class="grid">
+    <div class="bone"><span class="block"></span><span class="line"></span></div>
+    <div class="bone"><span class="block"></span><span class="line"></span></div>
+    <div class="bone"><span class="block"></span><span class="line"></span></div>
+    <div class="bone"><span class="block"></span><span class="line"></span></div>
+    <div class="bone"><span class="block"></span><span class="line"></span></div>
+    <div class="bone"><span class="block"></span><span class="line"></span></div>
+  </div>
 </main>
 <script>
 const main = document.getElementById("main");
@@ -144,6 +161,7 @@ function clearMap() {
 }
 
 function render(data) {
+  main.removeAttribute("aria-hidden");
   clearMap();
   const places = data.places || [];
   const named = places.filter((place) => !/^-?\d+\.\d+/.test(place.label));
