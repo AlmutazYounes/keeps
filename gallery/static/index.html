@@ -375,6 +375,7 @@ try {
   <a class="nav on" id="tab-photos" href="/">Photos</a>
   <a class="nav" id="tab-videos" href="/videos">Videos</a>
   <a class="nav" href="/faces">Faces</a>
+  <a class="nav" href="/categories">Categories</a>
   <a class="nav" href="/review">Review</a>
   <a class="nav" href="/settings">Settings</a>
   <div id="count"></div>
@@ -391,6 +392,7 @@ try {
     <select id="filter-year" aria-label="Year"></select>
   </label>
   <button id="filter-date" class="ghost" type="button" hidden>Date</button>
+  <button id="filter-scope" class="ghost" type="button" hidden>Category</button>
   <button id="filter-photos" class="ghost" type="button">Photos</button>
   <button id="filter-videos" class="ghost" type="button">Videos</button>
   <input id="filter-text" type="search" placeholder="Words" aria-label="Words in the caption or file name" autocomplete="off">
@@ -404,6 +406,7 @@ try {
   </div>
   <p>Person matches a saved name, and it ignores capitalization. Me is a person here, so me finds Me.</p>
   <p>A month, a year, and a day count wherever they sit. me 2025 july is July 2025. September 2025 and Sep 25, 2025 use the date stored on the item.</p>
+  <p>screenshots from 2024 and documents in 2025 keep that kind of photo. A place name works like a person name. A photo with no description is not treated as a screenshot or a document.</p>
   <p>Photos keeps stills. Videos keeps videos. The Photos and Videos tabs still switch the page.</p>
   <p>The other words have to appear in the caption or the file name. Short words such as wearing are skipped. A word run together, such as carseat, still matches a caption that says car seat.</p>
   <p>Videos are not given descriptions, and faces are not saved for them. A video search still limits the grid to videos. It then checks the file name, plus a caption or a face if one was saved.</p>
@@ -1099,6 +1102,7 @@ const MONTHS = {
 const MONTH_LABELS = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const STOPWORDS = new Set(["a", "an", "the", "in", "on", "at", "of", "for", "to", "and", "or", "with", "from", "by", "as", "is", "it", "my", "our", "their", "this", "that", "these", "those", "into", "onto", "during", "some", "just", "very", "wearing", "wear", "wears", "wore", "be", "was", "were", "am", "are", "his", "her", "its", "me"]);
 const VIDEO_WORDS = new Set(["video", "videos"]);
+const CATEGORY_WORDS = { screenshot: "screenshot", screenshots: "screenshot", document: "document", documents: "document" };
 const PHOTO_WORDS = new Set(["photo", "photos", "picture", "pictures"]);
 const helpBtn = document.getElementById("search-help");
 const helpPanel = document.getElementById("search-help-panel");
@@ -1108,12 +1112,26 @@ const dateBtn = document.getElementById("filter-date");
 const photoBtn = document.getElementById("filter-photos");
 const videoBtn = document.getElementById("filter-videos");
 const textEl = document.getElementById("filter-text");
+const scopeBtn = document.getElementById("filter-scope");
 let helpOpen = false;
+let kindsById = {};
+let placeById = {};
+let placeNames = [];
+let categoriesLoaded = false;
+const startParams = new URLSearchParams(location.search);
+function normCategory(value) {
+  const word = String(value || "").toLowerCase();
+  if (word === "screenshot" || word === "screenshots") return "screenshot";
+  if (word === "document" || word === "documents") return "document";
+  return "";
+}
+let pinnedCategory = normCategory(startParams.get("category"));
+let pinnedPlace = startParams.get("place") || "";
 let syncing = false;
 let filters = emptyFilters();
 
 function emptyFilters() {
-  return { person: "", people: [], year: null, month: null, day: null, kind: "", words: [], text: "" };
+  return { person: "", people: [], place: "", category: "", year: null, month: null, day: null, kind: "", words: [], text: "" };
 }
 
 function escapeReg(value) {
@@ -1234,7 +1252,7 @@ function readDate(lower, consumed) {
   };
 }
 
-function parseQuery(text, people) {
+function parseQuery(text, people, places) {
   const lower = String(text || "").toLowerCase();
   const consumed = new Array(lower.length).fill(false);
   const found = [];
@@ -1251,6 +1269,8 @@ function parseQuery(text, people) {
   });
   found.sort((a, b) => a.at - b.at);
   const matched = found.map((item) => item.name);
+  const place = readPlace(lower, consumed, places);
+  const category = readCategory(lower, consumed);
   const when = readDate(lower, consumed);
   const year = when.year;
   const month = when.month;
@@ -1285,6 +1305,8 @@ function parseQuery(text, people) {
   return {
     person: matched[0] || "",
     people: matched,
+    place: place,
+    category: category,
     year: year,
     month: month,
     day: day,
@@ -1292,6 +1314,46 @@ function parseQuery(text, people) {
     words: words,
     text: words.join(" "),
   };
+}
+
+function readPlace(lower, consumed, places) {
+  const ranked = [];
+  (places || []).forEach((label) => {
+    const text = String(label || "").trim();
+    if (!text) return;
+    const names = [text];
+    const city = text.split(",")[0].trim();
+    if (city && city.toLowerCase() !== text.toLowerCase()) names.push(city);
+    names.forEach((name) => ranked.push({ length: name.length, folded: name.toLowerCase(), label: text }));
+  });
+  ranked.sort((a, b) => b.length - a.length);
+  for (let i = 0; i < ranked.length; i++) {
+    const pattern = new RegExp("(?<![a-z0-9])" + escapeReg(ranked[i].folded) + "(?![a-z0-9])");
+    const match = pattern.exec(lower);
+    if (!match) continue;
+    const end = match.index + match[0].length;
+    if (spanTaken(consumed, match.index, end)) continue;
+    markSpan(consumed, match.index, end);
+    return ranked[i].label;
+  }
+  return "";
+}
+
+function readCategory(lower, consumed) {
+  let found = "";
+  const spans = [];
+  const wordRe = /[a-z0-9]+/g;
+  let match;
+  while ((match = wordRe.exec(lower))) {
+    const end = match.index + match[0].length;
+    if (spanTaken(consumed, match.index, end)) continue;
+    const kind = CATEGORY_WORDS[match[0]];
+    if (!kind) continue;
+    if (!found) found = kind;
+    spans.push([match.index, end]);
+  }
+  spans.forEach((span) => markSpan(consumed, span[0], span[1]));
+  return found;
 }
 
 function contentWords(text) {
@@ -1368,6 +1430,11 @@ function itemMatches(item, matchFilters, caption, idsByPerson, groupYear, groupM
   if (matchFilters.year && parts.year !== matchFilters.year) return false;
   if (matchFilters.month && parts.month !== matchFilters.month) return false;
   if (matchFilters.day && parts.day !== matchFilters.day) return false;
+  if (matchFilters.category) {
+    const have = kindsById[parts.id] || kindsById[String(parts.id)] || [];
+    if (have.indexOf(matchFilters.category) === -1) return false;
+  }
+  if (matchFilters.place && !placeMatches(placeById[parts.id] || placeById[String(parts.id)] || "", matchFilters.place)) return false;
   const words = matchFilters.words || [];
   const fileSq = squash(parts.name);
   const capSq = squash(caption);
@@ -1383,10 +1450,29 @@ function activeKind() {
   return videosOnly ? "video" : "";
 }
 
+function placeMatches(photoLabel, queryPlace) {
+  const photo = String(photoLabel || "").trim().toLowerCase();
+  const query = String(queryPlace || "").trim().toLowerCase();
+  if (!query) return true;
+  if (!photo) return false;
+  if (photo === query || photo.indexOf(query + ",") === 0) return true;
+  return photo.split(",")[0].trim() === query.split(",")[0].trim();
+}
+
+function activeCategory() {
+  return filters.category || pinnedCategory || "";
+}
+
+function activePlace() {
+  return filters.place || pinnedPlace || "";
+}
+
 function filtering() {
   return Boolean(
     searchEl.value.trim()
     || filters.person
+    || activeCategory()
+    || activePlace()
     || filters.year
     || filters.month
     || filters.day
@@ -1422,6 +1508,16 @@ function paintFilters() {
   years.sort((a, b) => Number(b) - Number(a));
   yearSel.innerHTML = '<option value="">Any year</option>' + years.map((year) => `<option value="${year}">${year}</option>`).join("");
   yearSel.value = filters.year ? String(filters.year) : "";
+  const scopeBits = [];
+  if (activeCategory() === "screenshot") scopeBits.push("Screenshots");
+  if (activeCategory() === "document") scopeBits.push("Documents");
+  if (activePlace()) scopeBits.push(activePlace());
+  if (scopeBits.length) {
+    scopeBtn.hidden = false;
+    scopeBtn.textContent = scopeBits.join(", ");
+  } else {
+    scopeBtn.hidden = true;
+  }
   if (filters.month) {
     let label = MONTH_LABELS[filters.month] || "";
     if (filters.day) label += " " + filters.day;
@@ -1528,6 +1624,8 @@ function applyView() {
     day: filters.day,
     kind: kind,
     words: filters.words.slice(),
+    category: activeCategory(),
+    place: activePlace(),
   };
   let faceIds = null;
   if (facePersonId && !matchFilters.people.length) {
@@ -1574,7 +1672,7 @@ function loadFacePerson() {
     .then((response) => response.ok ? response.json() : null)
     .then((data) => {
       extraPerson = data;
-      if (searchEl.value.trim()) filters = parseQuery(searchEl.value, peopleForParse());
+      if (searchEl.value.trim()) filters = parseQuery(searchEl.value, peopleForParse(), placeNames);
       paintFilters();
       applyView();
     })
@@ -1582,7 +1680,9 @@ function loadFacePerson() {
 }
 
 searchEl.addEventListener("input", () => {
-  filters = parseQuery(searchEl.value, peopleForParse());
+  pinnedCategory = "";
+  pinnedPlace = "";
+  filters = parseQuery(searchEl.value, peopleForParse(), placeNames);
   paintFilters();
   applyView();
   scroller.scrollTop = 0;
@@ -1645,7 +1745,7 @@ helpPanel.addEventListener("click", (event) => {
   const button = event.target.closest("[data-query]");
   if (!button) return;
   searchEl.value = button.dataset.query;
-  filters = parseQuery(searchEl.value, peopleForParse());
+  filters = parseQuery(searchEl.value, peopleForParse(), placeNames);
   helpOpen = false;
   paintFilters();
   applyView();
@@ -1690,7 +1790,7 @@ document.getElementById("face-save").addEventListener("click", () => {
 fetch("/api/people").then((response) => response.json()).then((data) => {
   namedPeople = data.people || [];
   peopleReady = true;
-  if (searchEl.value.trim()) filters = parseQuery(searchEl.value, peopleForParse());
+  if (searchEl.value.trim()) filters = parseQuery(searchEl.value, peopleForParse(), placeNames);
   paintFilters();
   loadFacePerson();
 }).catch(() => {
@@ -1698,6 +1798,52 @@ fetch("/api/people").then((response) => response.json()).then((data) => {
   paintFilters();
   loadFacePerson();
 });
+
+scopeBtn.addEventListener("click", () => {
+  const category = activeCategory();
+  const place = activePlace();
+  pinnedCategory = "";
+  pinnedPlace = "";
+  let text = searchEl.value;
+  if (category) text = text.replace(new RegExp("\\b" + category + "s?\\b", "ig"), " ");
+  if (place) {
+    [place, place.split(",")[0]].forEach((part) => {
+      const name = String(part || "").trim();
+      if (!name) return;
+      text = text.replace(new RegExp("(?<![a-z0-9])" + escapeReg(name) + "(?![a-z0-9])", "ig"), " ");
+    });
+  }
+  searchEl.value = text.replace(/\s+/g, " ").trim();
+  filters = parseQuery(searchEl.value, peopleForParse(), placeNames);
+  history.replaceState(null, "", location.pathname);
+  paintFilters();
+  applyView();
+});
+
+function loadCategories() {
+  fetch("/api/categories")
+    .then((response) => response.ok ? response.json() : null)
+    .then((data) => {
+      if (!data || !data.index) return;
+      const nextKinds = data.index.kinds || {};
+      const nextPlaces = data.index.places || {};
+      const changed = !categoriesLoaded
+        || Object.keys(nextKinds).length !== Object.keys(kindsById).length
+        || Object.keys(nextPlaces).length !== Object.keys(placeById).length;
+      kindsById = nextKinds;
+      placeById = nextPlaces;
+      placeNames = data.names || [];
+      categoriesLoaded = true;
+      if (searchEl.value.trim()) filters = parseQuery(searchEl.value, peopleForParse(), placeNames);
+      if (changed && (filtering() || searchEl.value.trim())) {
+        paintFilters();
+        applyView();
+      }
+      if (!data.geo || !data.geo.done) setTimeout(loadCategories, 3000);
+    })
+    .catch(() => {});
+}
+loadCategories();
 
 function loadCaptions() {
   fetch("/api/captions")
