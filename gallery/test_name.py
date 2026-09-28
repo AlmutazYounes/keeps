@@ -41,10 +41,11 @@ class NameTests(unittest.TestCase):
         self.assertNotIn("local-photos", context)
         self.assertNotIn("LocalPhotos", server)
 
-    def test_the_changelog_has_an_unreleased_entry(self):
+    def test_the_changelog_names_0_1_0(self):
         changelog = (ROOT / "CHANGELOG.md").read_text()
         self.assertTrue(changelog.startswith("# Changelog\n"))
-        self.assertIn("## Unreleased", changelog)
+        self.assertIn("## 0.1.0", changelog)
+        self.assertIn("2026-09-28", changelog)
 
 
 if __name__ == "__main__":

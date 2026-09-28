@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.1.0
+
+2026-09-28
 
 First public copy of the local gallery.
 
