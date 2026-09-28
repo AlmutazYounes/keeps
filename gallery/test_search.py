@@ -309,14 +309,18 @@ class PageCopyTests(unittest.TestCase):
         self.assertNotIn("faces_lib", source)
         self.assertNotIn("caption_lib", source)
 
-    def test_help_uses_the_library_examples(self):
+    def test_the_photo_page_has_no_help_button(self):
         html = (Path(__file__).parent / "static" / "index.html").read_text()
-        self.assertIn("yara in a carseat video", html)
-        self.assertIn("me wearing yellow", html)
-        self.assertIn("me in 2025", html)
-        self.assertIn("screenshots from 2024", html)
-        self.assertIn("documents in 2025", html)
-        self.assertIn("Videos are not given descriptions", html)
+        self.assertNotIn('id="search-help"', html)
+        self.assertNotIn(">Help</button>", html)
+        self.assertNotIn("Loading library", html)
+        self.assertIn('id="placeholders"', html)
+        faces = (Path(__file__).parent / "static" / "faces.html").read_text()
+        categories = (Path(__file__).parent / "static" / "categories.html").read_text()
+        self.assertNotIn("Loading faces", faces)
+        self.assertNotIn("Loading categories", categories)
+        self.assertIn('class="bone"', faces)
+        self.assertIn('class="bone"', categories)
         self.assertNotIn("\u2014", html)
 
     def test_readme_uses_placeholder_names(self):
