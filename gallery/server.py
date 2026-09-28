@@ -1,0 +1,956 @@
+#!/usr/bin/env python3
+"""Local photo library browser for the sorted Google Photos backup.
+
+Originals stay in Photos/. Thumbnails are cached under gallery/cache/.
+"""
+
+import json
+import mimetypes
+import os
+import plistlib
+import re
+import subprocess
+import threading
+import urllib.request
+from datetime import datetime, timezone
+
+import captions_db
+import faces_db
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse
+
+ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
+PHOTOS = ROOT / "Photos"
+APP = ROOT / "gallery"
+CACHE = APP / "cache" / "thumbs"
+VIEWS = APP / "cache" / "views"
+PAGE = APP / "static" / "index.html"
+FACES_PAGE = APP / "static" / "faces.html"
+FACE_CROPS = APP / "cache" / "faces"
+FACE_BOXES = APP / "cache" / "facebox"
+PLACE_PATH = APP / "cache" / "places.json"
+PLACE_LOCK = threading.Lock()
+US_STATES = {
+    "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR",
+    "California": "CA", "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE",
+    "Florida": "FL", "Georgia": "GA", "Hawaii": "HI", "Idaho": "ID",
+    "Illinois": "IL", "Indiana": "IN", "Iowa": "IA", "Kansas": "KS",
+    "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
+    "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN", "Mississippi": "MS",
+    "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
+    "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
+    "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK",
+    "Oregon": "OR", "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC",
+    "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX", "Utah": "UT",
+    "Vermont": "VT", "Virginia": "VA", "Washington": "WA", "West Virginia": "WV",
+    "Wisconsin": "WI", "Wyoming": "WY", "District of Columbia": "DC",
+}
+HOST = "127.0.0.1"
+PORT = 8765
+
+IMAGE_EXT = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
+    ".tif", ".tiff", ".bmp",
+}
+VIDEO_EXT = {".mp4", ".mov", ".m4v", ".3gp", ".asf", ".webm"}
+BROWSER_IMAGE = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+MONTH_NAMES = {
+    "01": "January", "02": "February", "03": "March", "04": "April",
+    "05": "May", "06": "June", "07": "July", "08": "August",
+    "09": "September", "10": "October", "11": "November", "12": "December",
+}
+
+LIBRARY = {"ready": False, "count": 0, "groups": [], "by_id": {}}
+SEM = threading.Semaphore(4)
+LOCKS = {}
+LOCKS_GUARD = threading.Lock()
+
+
+def lock_for(key):
+    with LOCKS_GUARD:
+        lock = LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            LOCKS[key] = lock
+        return lock
+
+
+def kind_for(ext):
+    if ext in VIDEO_EXT:
+        return "video"
+    if ext in BROWSER_IMAGE:
+        return "image"
+    return "convert"
+
+
+def month_sort_value(month):
+    if month == "Unknown":
+        return -1
+    try:
+        return int(month[:2])
+    except ValueError:
+        return -1
+
+
+def year_sort_value(year):
+    if year.isdigit():
+        return int(year)
+    return -1
+
+
+def label_for(year, month):
+    if year == "Unknown":
+        return "Undated"
+    if month == "Unknown":
+        return f"Undated {year}"
+    nice = MONTH_NAMES.get(month[:2], month)
+    return f"{nice} {year}"
+
+
+def scan():
+    found = []
+    for dirpath, dirnames, filenames in os.walk(PHOTOS):
+        dirnames[:] = [name for name in dirnames if not name.startswith(".")]
+        folder = Path(dirpath)
+        rel_dir = folder.relative_to(PHOTOS)
+        parts = rel_dir.parts
+        year = parts[0] if parts else "Unknown"
+        month = parts[1] if len(parts) > 1 else "Unknown"
+        for name in filenames:
+            if name.startswith("."):
+                continue
+            ext = Path(name).suffix.lower()
+            if ext not in IMAGE_EXT and ext not in VIDEO_EXT:
+                continue
+            path = folder / name
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            taken = datetime.fromtimestamp(stat.st_mtime)
+            date = ""
+            if year.isdigit() and month != "Unknown" and taken.year == int(year):
+                date = taken.strftime("%Y-%m-%d")
+            found.append({
+                "rel": str(path.relative_to(PHOTOS)),
+                "name": name,
+                "ext": ext,
+                "kind": kind_for(ext),
+                "year": year,
+                "month": month,
+                "date": date,
+                "mtime": stat.st_mtime,
+                "size": stat.st_size,
+            })
+
+    found.sort(key=lambda item: item["mtime"], reverse=True)
+    buckets = {}
+    for photo in found:
+        buckets.setdefault((photo["year"], photo["month"]), []).append(photo)
+
+    keys = sorted(
+        buckets,
+        key=lambda pair: (year_sort_value(pair[0]), month_sort_value(pair[1])),
+        reverse=True,
+    )
+    groups = []
+    by_id = {}
+    next_id = 1
+    for year, month in keys:
+        items = []
+        for photo in buckets[(year, month)]:
+            photo["id"] = next_id
+            by_id[next_id] = photo
+            items.append([next_id, photo["name"], photo["kind"], photo["date"]])
+            next_id += 1
+        groups.append({
+            "year": year,
+            "month": month,
+            "label": label_for(year, month),
+            "items": items,
+        })
+    LIBRARY["groups"] = groups
+    LIBRARY["by_id"] = by_id
+    LIBRARY["count"] = len(by_id)
+    LIBRARY["ready"] = True
+    print(f"Indexed {LIBRARY['count']} files in {len(groups)} months.", flush=True)
+
+
+def thumb_path(photo):
+    return CACHE / f"{photo['id']}.jpg"
+
+
+def view_path(photo):
+    return VIEWS / f"{photo['id']}.jpg"
+
+
+def run_thumb(src, dest, kind):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.stem + ".tmp.jpg")
+    tmp.unlink(missing_ok=True)
+    if kind == "video":
+        commands = [
+            [
+                "ffmpeg", "-y", "-ss", "0", "-i", str(src), "-map", "0:v:0",
+                "-frames:v", "1", "-vf", "scale=480:-2", str(tmp),
+            ],
+            [
+                "ffmpeg", "-y", "-ss", "0", "-i", str(src),
+                "-frames:v", "1", "-vf", "scale=480:-2", str(tmp),
+            ],
+        ]
+        for cmd in commands:
+            subprocess.run(cmd, capture_output=True)
+            if tmp.exists() and tmp.stat().st_size > 0:
+                break
+    else:
+        subprocess.run(
+            ["sips", "-s", "format", "jpeg", "-Z", "480", "--out", str(tmp), str(src)],
+            capture_output=True,
+        )
+    if tmp.exists() and tmp.stat().st_size > 0:
+        os.replace(tmp, dest)
+        return True
+    tmp.unlink(missing_ok=True)
+    return False
+
+
+def ensure_jpeg(photo, dest, size):
+    if dest.exists() and dest.stat().st_size > 0:
+        return dest
+    src = PHOTOS / photo["rel"]
+    with lock_for((dest.parent.name, photo["id"])):
+        if dest.exists() and dest.stat().st_size > 0:
+            return dest
+        with SEM:
+            if photo["kind"] == "video" and size == 480:
+                ok = run_thumb(src, dest, "video")
+            elif photo["kind"] == "video":
+                ok = False
+            else:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                tmp = dest.with_name(dest.stem + ".tmp.jpg")
+                subprocess.run(
+                    ["sips", "-s", "format", "jpeg", "-Z", str(size), "--out", str(tmp), str(src)],
+                    capture_output=True,
+                )
+                ok = tmp.exists() and tmp.stat().st_size > 0
+                if ok:
+                    os.replace(tmp, dest)
+                else:
+                    tmp.unlink(missing_ok=True)
+        return dest if ok else None
+
+
+def people_payload():
+    if not faces_db.DB_PATH.exists():
+        return {"ready": False, "people": [], "scanned": 0}
+    rel_to_photo = {photo["rel"]: photo for photo in LIBRARY["by_id"].values()}
+    conn = faces_db.connect()
+    scanned_row = conn.execute("SELECT value FROM meta WHERE key = 'scanned'").fetchone()
+    total_row = conn.execute("SELECT value FROM meta WHERE key = 'total'").fetchone()
+    qualified = conn.execute(
+        """
+        SELECT p.id, p.name, p.cover_face_id, COUNT(DISTINCT f.relpath) AS n
+        FROM people p
+        JOIN faces f ON f.person_id = p.id
+        GROUP BY p.id
+        HAVING n >= 10
+        ORDER BY n DESC
+        """
+    ).fetchall()
+    people = [
+        person_record(conn, person_id, name, cover_id, count, rel_to_photo)
+        for person_id, name, cover_id, count in qualified
+    ]
+    conn.close()
+    return {
+        "ready": True,
+        "scanned": int(scanned_row[0]) if scanned_row else 0,
+        "total": int(total_row[0]) if total_row else 0,
+        "people": people,
+    }
+
+
+def person_record(conn, person_id, name, cover_id, count, rel_to_photo):
+    rows = conn.execute(
+        """
+        SELECT relpath FROM faces
+        WHERE person_id = ?
+        ORDER BY score DESC
+        """,
+        (person_id,),
+    ).fetchall()
+    ids = []
+    photos = []
+    seen = set()
+    for (relpath,) in rows:
+        if relpath in seen:
+            continue
+        seen.add(relpath)
+        photo = rel_to_photo.get(relpath)
+        if photo is None:
+            continue
+        ids.append(photo["id"])
+        if len(photos) < 8:
+            photos.append({
+                "id": photo["id"],
+                "name": Path(relpath).name,
+                "kind": photo["kind"],
+            })
+    return {
+        "id": person_id,
+        "name": name,
+        "count": len(ids) or count,
+        "cover": f"/face-crop/{cover_id}" if cover_id else "",
+        "ids": ids,
+        "photos": photos,
+    }
+
+
+def person_detail(person_id):
+    if not faces_db.DB_PATH.exists() or not LIBRARY["ready"]:
+        return None
+    rel_to_photo = {photo["rel"]: photo for photo in LIBRARY["by_id"].values()}
+    conn = faces_db.connect()
+    row = conn.execute(
+        """
+        SELECT p.name, p.cover_face_id, COUNT(DISTINCT f.relpath)
+        FROM people p
+        JOIN faces f ON f.person_id = p.id
+        WHERE p.id = ?
+        GROUP BY p.id
+        """,
+        (person_id,),
+    ).fetchone()
+    if row is None:
+        conn.close()
+        return None
+    record = person_record(conn, person_id, row[0], row[1], row[2], rel_to_photo)
+    conn.close()
+    return record
+
+
+def format_bytes(size):
+    if size >= 1_000_000_000:
+        return f"{size / 1_000_000_000:.1f} GB"
+    if size >= 1_000_000:
+        return f"{size / 1_000_000:.1f} MB"
+    if size >= 1_000:
+        return f"{size / 1_000:.0f} KB"
+    return f"{size} B"
+
+
+def number_or_none(value):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def trim_num(value, digits=2):
+    return f"{float(value):.{digits}f}".rstrip("0").rstrip(".")
+
+
+def shutter_text(seconds):
+    try:
+        seconds = float(seconds)
+    except (TypeError, ValueError):
+        return ""
+    if seconds <= 0:
+        return ""
+    if seconds >= 1:
+        return f"{trim_num(seconds, 1)}s"
+    return f"1/{max(1, round(1 / seconds))}"
+
+
+def local_when(moment, assume_utc=True):
+    if moment is None:
+        return "", ""
+    if isinstance(moment, str):
+        text = moment.strip()
+        for fmt in ("%Y:%m:%d %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                moment = datetime.strptime(text[:19], fmt)
+                break
+            except ValueError:
+                continue
+        else:
+            return "", ""
+        assume_utc = False
+    if moment.tzinfo is None:
+        if assume_utc:
+            moment = moment.replace(tzinfo=timezone.utc)
+        else:
+            moment = moment.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    local = moment.astimezone()
+    offset = local.strftime("%z")
+    zone = f"GMT{offset[:3]}:{offset[3:]}" if len(offset) == 5 else (local.tzname() or "")
+    headline = local.strftime("%b %-d")
+    if local.year != datetime.now().astimezone().year:
+        headline = f"{headline}, {local.year}"
+    when = f"{local.strftime('%a')}, {local.strftime('%-I:%M %p')} {zone}".strip()
+    return headline, when
+
+
+def spotlight(path):
+    proc = subprocess.run(
+        ["mdls", "-plist", "-", str(path)],
+        capture_output=True,
+        timeout=8,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        return {}
+    try:
+        data = plistlib.loads(proc.stdout)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def sips_meta(path):
+    proc = subprocess.run(
+        ["sips", "-g", "all", str(path)],
+        capture_output=True,
+        text=True,
+        timeout=8,
+    )
+    meta = {}
+    for line in proc.stdout.splitlines():
+        if ":" not in line:
+            continue
+        key, _, value = line.strip().partition(":")
+        meta[key.strip()] = value.strip()
+    return meta
+
+
+def parse_iso6709(value):
+    match = re.match(r"([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)", value or "")
+    if not match:
+        return None, None
+    return float(match.group(1)), float(match.group(2))
+
+
+def video_probe(path):
+    proc = subprocess.run(
+        [
+            "ffprobe", "-v", "quiet", "-print_format", "json",
+            "-show_format", "-show_streams", str(path),
+        ],
+        capture_output=True,
+        timeout=12,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        return {}
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return {}
+
+
+def ultra_hdr(path):
+    if path.suffix.lower() not in {".jpg", ".jpeg"}:
+        return False
+    try:
+        with path.open("rb") as handle:
+            return b"hdrgm" in handle.read(131072)
+    except OSError:
+        return False
+
+
+def place_label(address):
+    city = (
+        address.get("city")
+        or address.get("town")
+        or address.get("village")
+        or address.get("hamlet")
+        or address.get("county")
+        or ""
+    )
+    for prefix in ("City of ", "Town of ", "Village of "):
+        city = city.removeprefix(prefix)
+    city = city.strip()
+    state = address.get("state") or ""
+    if address.get("country_code") == "us":
+        state = US_STATES.get(state, state)
+    if city and state:
+        return f"{city}, {state}"
+    return city or state
+
+
+def place_name(lat, lon):
+    key = f"{lat:.3f},{lon:.3f}"
+    with PLACE_LOCK:
+        try:
+            cache = json.loads(PLACE_PATH.read_text())
+        except (OSError, json.JSONDecodeError):
+            cache = {}
+        if key in cache:
+            return cache[key]
+    label = ""
+    try:
+        url = (
+            "https://nominatim.openstreetmap.org/reverse"
+            f"?format=jsonv2&lat={lat}&lon={lon}&zoom=12"
+        )
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "LocalPhotos/1.0 (personal photo library)"},
+        )
+        with urllib.request.urlopen(request, timeout=4) as response:
+            payload = json.loads(response.read().decode())
+        label = place_label(payload.get("address") or {})
+    except Exception:
+        label = ""
+    if not label:
+        return ""
+    with PLACE_LOCK:
+        try:
+            cache = json.loads(PLACE_PATH.read_text())
+        except (OSError, json.JSONDecodeError):
+            cache = {}
+        cache[key] = label
+        PLACE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        PLACE_PATH.write_text(json.dumps(cache))
+    return label
+
+
+def people_in(relpath):
+    if not faces_db.DB_PATH.exists():
+        return []
+    conn = faces_db.connect()
+    rows = conn.execute(
+        """
+        SELECT f.id, f.person_id, p.name, f.score
+        FROM faces f
+        JOIN people p ON p.id = f.person_id
+        WHERE f.relpath = ?
+        ORDER BY f.score DESC
+        """,
+        (relpath,),
+    ).fetchall()
+    conn.close()
+    seen = set()
+    people = []
+    for face_id, person_id, name, _score in rows:
+        if person_id in seen:
+            continue
+        seen.add(person_id)
+        people.append({
+            "id": person_id,
+            "face_id": face_id,
+            "name": name.strip(),
+        })
+    return people
+
+
+def photo_info(photo):
+    src = PHOTOS / photo["rel"]
+    info = {
+        "name": photo["name"],
+        "folder": str(Path(photo["rel"]).parent),
+        "kind": photo["kind"],
+        "size": format_bytes(photo["size"]),
+        "people": people_in(photo["rel"]),
+    }
+    meta = {}
+    try:
+        meta = spotlight(src)
+    except Exception:
+        meta = {}
+    width = meta.get("kMDItemPixelWidth")
+    height = meta.get("kMDItemPixelHeight")
+    taken = meta.get("kMDItemContentCreationDate")
+    make = meta.get("kMDItemAcquisitionMake") or ""
+    model = meta.get("kMDItemAcquisitionModel") or ""
+    fnumber = meta.get("kMDItemFNumber")
+    shutter = meta.get("kMDItemExposureTimeSeconds")
+    focal = meta.get("kMDItemFocalLength")
+    focal35 = meta.get("kMDItemFocalLength35mm")
+    iso = meta.get("kMDItemISOSpeed")
+    lat = meta.get("kMDItemLatitude")
+    lon = meta.get("kMDItemLongitude")
+    altitude = meta.get("kMDItemAltitude")
+    software = meta.get("kMDItemCreator") or ""
+    description = meta.get("kMDItemDescription") or ""
+    if isinstance(description, str) and description.strip() in {"", "(null)"}:
+        description = ""
+    duration = meta.get("kMDItemDurationSeconds")
+    codecs = meta.get("kMDItemCodecs") or []
+    if not width or not model or taken is None:
+        try:
+            basic = sips_meta(src)
+        except Exception:
+            basic = {}
+        width = width or number_or_none(basic.get("pixelWidth"))
+        height = height or number_or_none(basic.get("pixelHeight"))
+        make = make or basic.get("make") or ""
+        model = model or basic.get("model") or ""
+        software = software or basic.get("software") or ""
+        if taken is None and basic.get("creation"):
+            taken = basic["creation"]
+    if photo["kind"] == "video":
+        try:
+            probe = video_probe(src)
+        except Exception:
+            probe = {}
+        tags = (probe.get("format") or {}).get("tags") or {}
+        if not model:
+            make = make or tags.get("com.android.manufacturer") or tags.get("com.apple.quicktime.make") or ""
+            model = tags.get("com.android.model") or tags.get("com.apple.quicktime.model") or ""
+        if lat is None or lon is None:
+            lat, lon = parse_iso6709(tags.get("location") or tags.get("location-eng") or "")
+    if make and model and make.lower() not in model.lower():
+        info["camera"] = f"{make} {model}".strip()
+    elif model or make:
+        info["camera"] = (model or make).strip()
+    bits = []
+    if fnumber:
+        bits.append(f"f/{trim_num(fnumber)}")
+    shutter_label = shutter_text(shutter)
+    if shutter_label:
+        bits.append(shutter_label)
+    if focal:
+        lens = f"{trim_num(focal)}mm"
+        if focal35 and abs(float(focal35) - float(focal)) > 1:
+            lens = f"{lens} ({trim_num(focal35, 0)}mm)"
+        bits.append(lens)
+    if iso:
+        bits.append(f"ISO{int(float(iso))}")
+    if bits:
+        info["exposure"] = "  ".join(bits)
+    if width and height:
+        pixels = int(width) * int(height)
+        info["pixels"] = f"{pixels / 1_000_000:.1f}MP"
+        info["dimensions"] = f"{int(width)} × {int(height)}"
+    headline, when = local_when(taken)
+    if not headline:
+        headline, when = local_when(datetime.fromtimestamp(photo["mtime"], timezone.utc))
+    if headline:
+        info["date"] = headline
+        info["when"] = when
+    caption = captions_db.one(photo["rel"])
+    if caption:
+        info["description"] = caption
+    elif description:
+        info["description"] = description.strip()
+    if software and not str(software).endswith("fps"):
+        info["software"] = str(software)
+    if isinstance(altitude, (int, float)):
+        info["altitude"] = f"{round(altitude)} m"
+    if duration:
+        total = int(round(float(duration)))
+        info["duration"] = f"{total // 60}:{total % 60:02d}"
+    if isinstance(codecs, list) and codecs:
+        info["codecs"] = ", ".join(str(item) for item in codecs)
+    if ultra_hdr(src):
+        info["hdr"] = "Ultra HDR"
+    if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+        info["latitude"] = round(float(lat), 6)
+        info["longitude"] = round(float(lon), 6)
+        info["place"] = place_name(float(lat), float(lon))
+    return info
+
+
+def ensure_face_box(face_id):
+    dest = FACE_BOXES / f"{face_id}.jpg"
+    if dest.is_file() and dest.stat().st_size > 0:
+        return dest
+    with lock_for(("facebox", face_id)):
+        if dest.is_file() and dest.stat().st_size > 0:
+            return dest
+        if not faces_db.DB_PATH.exists():
+            return None
+        conn = faces_db.connect()
+        row = conn.execute(
+            "SELECT relpath, x1, y1, x2, y2 FROM faces WHERE id = ?",
+            (face_id,),
+        ).fetchone()
+        conn.close()
+        if row is None:
+            return None
+        src = PHOTOS / row[0]
+        if not src.is_file():
+            return None
+        proc = subprocess.run(
+            ["sips", "-g", "pixelWidth", "-g", "pixelHeight", str(src)],
+            capture_output=True,
+            text=True,
+            timeout=8,
+        )
+        size = {}
+        for line in proc.stdout.splitlines():
+            if ":" not in line:
+                continue
+            key, _, value = line.strip().partition(":")
+            size[key.strip()] = value.strip()
+        try:
+            width = int(float(size["pixelWidth"]))
+            height = int(float(size["pixelHeight"]))
+        except (KeyError, ValueError):
+            return None
+        x1, y1, x2, y2 = row[1:]
+        box_w = max(1.0, (x2 - x1) * width)
+        box_h = max(1.0, (y2 - y1) * height)
+        side = min(width, height, max(box_w, box_h) * 1.8)
+        side = max(32.0, side)
+        center_x = (x1 + x2) / 2 * width
+        center_y = (y1 + y2) / 2 * height
+        left = int(max(0, min(width - side, center_x - side / 2)))
+        top = int(max(0, min(height - side, center_y - side / 2)))
+        side = int(side)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dest.with_name(dest.stem + ".tmp.jpg")
+        tmp.unlink(missing_ok=True)
+        subprocess.run(
+            [
+                "sips", "--cropOffset", str(top), str(left),
+                "-c", str(side), str(side),
+                "-s", "format", "jpeg",
+                "--out", str(tmp), str(src),
+            ],
+            capture_output=True,
+            timeout=15,
+        )
+        if tmp.exists() and tmp.stat().st_size > 0:
+            os.replace(tmp, dest)
+            return dest
+        tmp.unlink(missing_ok=True)
+        return None
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, fmt, *args):
+        return
+
+    def do_GET(self):
+        try:
+            self.route()
+        except (BrokenPipeError, ConnectionResetError):
+            return
+        except Exception as exc:
+            print(f"ERROR {self.path}: {exc}", flush=True)
+            self.respond(500, b"error", "text/plain")
+
+    def do_POST(self):
+        try:
+            self.route_post()
+        except (BrokenPipeError, ConnectionResetError):
+            return
+        except Exception as exc:
+            print(f"ERROR POST {self.path}: {exc}", flush=True)
+            self.respond(500, b"error", "text/plain")
+
+    def route(self):
+        path = urlparse(self.path).path
+        if path in ("/", "/index.html", "/videos"):
+            data = PAGE.read_bytes()
+            self.respond(200, data, "text/html; charset=utf-8")
+            return
+        if path == "/faces":
+            self.respond(200, FACES_PAGE.read_bytes(), "text/html; charset=utf-8")
+            return
+        if path == "/api/people":
+            body = json.dumps(people_payload()).encode()
+            self.respond(200, body, "application/json")
+            return
+        if path.startswith("/api/people/"):
+            token = path.rstrip("/").split("/")[-1]
+            if not token.isdigit():
+                self.respond(404, b"not found", "text/plain")
+                return
+            record = person_detail(int(token))
+            if record is None:
+                self.respond(404, b"not found", "text/plain")
+                return
+            self.respond(200, json.dumps(record).encode(), "application/json")
+            return
+        if path.startswith("/face-crop/"):
+            token = path[11:].split(".", 1)[0]
+            crop = FACE_CROPS / f"{token}.jpg"
+            if not token.isdigit() or not crop.is_file():
+                self.respond(404, b"not found", "text/plain")
+                return
+            self.serve_path(crop, "image/jpeg", cache="private, max-age=3600")
+            return
+        if path.startswith("/api/info/"):
+            photo = self.photo_from_token(path[len("/api/info/"):])
+            if photo is None:
+                self.respond(404, b"not found", "text/plain")
+                return
+            body = json.dumps(photo_info(photo)).encode()
+            self.respond(200, body, "application/json")
+            return
+        if path.startswith("/face-box/"):
+            token = path[len("/face-box/"):].split(".", 1)[0]
+            if not token.isdigit():
+                self.respond(404, b"not found", "text/plain")
+                return
+            crop = ensure_face_box(int(token))
+            if crop is None:
+                self.respond(404, b"not found", "text/plain")
+                return
+            self.serve_path(crop, "image/jpeg", cache="private, max-age=86400")
+            return
+        if path == "/api/captions":
+            if not LIBRARY["ready"]:
+                self.respond(503, b'{"ready":false}', "application/json")
+                return
+            texts = captions_db.caption_map()
+            by_id = {}
+            for photo_id, photo in LIBRARY["by_id"].items():
+                text = texts.get(photo["rel"])
+                if text:
+                    by_id[str(photo_id)] = text
+            body = json.dumps({"count": len(by_id), "by_id": by_id}, separators=(",", ":")).encode()
+            self.respond(200, body, "application/json")
+            return
+        if path == "/api/library":
+            if not LIBRARY["ready"]:
+                self.respond(503, b'{"ready":false}', "application/json")
+                return
+            payload = {
+                "count": LIBRARY["count"],
+                "groups": LIBRARY["groups"],
+            }
+            body = json.dumps(payload, separators=(",", ":")).encode()
+            self.respond(200, body, "application/json")
+            return
+        if path.startswith("/thumb/"):
+            self.serve_derived(path[7:], thumb_path, 480, "thumb")
+            return
+        if path.startswith("/view/"):
+            self.serve_derived(path[6:], view_path, 2000, "view")
+            return
+        if path.startswith("/media/"):
+            self.serve_original(path[7:])
+            return
+        self.respond(404, b"not found", "text/plain")
+
+    def route_post(self):
+        path = urlparse(self.path).path
+        if not path.startswith("/api/people/"):
+            self.respond(404, b"not found", "text/plain")
+            return
+        token = path.rstrip("/").split("/")[-1]
+        if not token.isdigit():
+            self.respond(404, b"not found", "text/plain")
+            return
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        name = str(payload.get("name", "")).strip()[:80]
+        merged_into = faces_db.set_name(int(token), name)
+        body = json.dumps({
+            "ok": True,
+            "name": name,
+            "merged_into": merged_into,
+        }).encode()
+        self.respond(200, body, "application/json")
+
+    def photo_from_token(self, token):
+        token = token.split(".", 1)[0]
+        if not token.isdigit():
+            return None
+        return LIBRARY["by_id"].get(int(token))
+
+    def serve_derived(self, token, path_fn, size, cache_name):
+        photo = self.photo_from_token(token)
+        if photo is None:
+            self.respond(404, b"not found", "text/plain")
+            return
+        if cache_name == "view" and photo["kind"] == "video":
+            self.serve_original(token)
+            return
+        if cache_name == "view" and photo["kind"] == "image":
+            self.serve_original(token)
+            return
+        dest = path_fn(photo)
+        ready = ensure_jpeg(photo, dest, size)
+        if ready is None:
+            self.respond(404, b"preview unavailable", "text/plain")
+            return
+        self.serve_path(ready, "image/jpeg", cache="private, max-age=2592000")
+
+    def serve_original(self, token):
+        photo = self.photo_from_token(token)
+        if photo is None:
+            self.respond(404, b"not found", "text/plain")
+            return
+        src = PHOTOS / photo["rel"]
+        if not src.is_file():
+            self.respond(404, b"missing", "text/plain")
+            return
+        ctype = mimetypes.types_map.get(photo["ext"], "application/octet-stream")
+        if photo["ext"] == ".heic":
+            ctype = "image/heic"
+        if photo["ext"] == ".mov":
+            ctype = "video/quicktime"
+        self.serve_path(src, ctype, cache="private, max-age=86400")
+
+    def serve_path(self, path, content_type, cache):
+        size = path.stat().st_size
+        start, end = 0, size - 1
+        status = 200
+        range_header = self.headers.get("Range")
+        if range_header and range_header.startswith("bytes="):
+            spec = range_header.split("=", 1)[1].split(",")[0].strip()
+            left, _, right = spec.partition("-")
+            if left == "":
+                start = max(0, size - int(right or "0"))
+            else:
+                start = int(left)
+                end = int(right) if right else size - 1
+            end = min(end, size - 1)
+            if start >= size or start > end:
+                body = b""
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            status = 206
+        length = end - start + 1
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(length))
+        self.send_header("Cache-Control", cache)
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+        with path.open("rb") as handle:
+            handle.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = handle.read(min(256 * 1024, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
+
+    def respond(self, status, body, content_type):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+
+def main():
+    CACHE.mkdir(parents=True, exist_ok=True)
+    VIEWS.mkdir(parents=True, exist_ok=True)
+    print("Scanning library...", flush=True)
+    scan()
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    print(f"Open http://{HOST}:{PORT}", flush=True)
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
