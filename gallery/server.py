@@ -9,6 +9,7 @@ import mimetypes
 import os
 import plistlib
 import re
+import socket
 import subprocess
 import threading
 import urllib.request
@@ -234,14 +235,42 @@ def run_thumb(src, dest, kind):
     return False
 
 
-def ensure_jpeg(photo, dest, size):
+def client_gone(conn):
+    """True when the browser already dropped this connection."""
+    if conn is None:
+        return True
+    try:
+        conn.setblocking(False)
+        try:
+            data = conn.recv(1, socket.MSG_PEEK)
+        finally:
+            conn.setblocking(True)
+    except BlockingIOError:
+        return False
+    except OSError:
+        return True
+    return data == b""
+
+
+def ensure_jpeg(photo, dest, size, still=None):
+    def wanted():
+        return True if still is None else bool(still())
+
     if dest.exists() and dest.stat().st_size > 0:
         return dest
+    if not wanted():
+        return None
     src = PHOTOS / photo["rel"]
     with lock_for((dest.parent.name, photo["id"])):
         if dest.exists() and dest.stat().st_size > 0:
             return dest
+        if not wanted():
+            return None
         with SEM:
+            if dest.exists() and dest.stat().st_size > 0:
+                return dest
+            if not wanted():
+                return None
             if photo["kind"] == "video" and size == 480:
                 ok = run_thumb(src, dest, "video")
             elif photo["kind"] == "video":
@@ -1216,8 +1245,10 @@ class Handler(BaseHTTPRequestHandler):
             self.serve_original(token)
             return
         dest = path_fn(photo)
-        ready = ensure_jpeg(photo, dest, size)
+        ready = ensure_jpeg(photo, dest, size, still=lambda: not client_gone(self.connection))
         if ready is None:
+            if client_gone(self.connection):
+                return
             self.respond(404, b"preview unavailable", "text/plain")
             return
         self.serve_path(ready, "image/jpeg", cache="private, max-age=2592000")
