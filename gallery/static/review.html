@@ -27,13 +27,23 @@ try {
     display: flex; align-items: center; gap: 16px;
     height: 64px; padding: 0 20px; background: var(--bg); border-bottom: 1px solid var(--line);
   }
-  .brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
+  .brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; margin-right: 4px; }
   .logo { display: block; flex: none; }
   h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.03em; }
   a { color: inherit; text-decoration: none; }
+  .tabs { display: flex; align-items: center; padding: 3px; background: var(--chip); border-radius: 999px; }
+  .tabs a { color: var(--ink); text-decoration: none; border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600; }
+  .tabs a.on { background: var(--nav-on); color: var(--nav-on-ink); }
+  .links { display: flex; align-items: center; gap: 14px; }
+  .links a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  .links a:hover, .links a.on { color: var(--ink); }
+  .links a.on { font-weight: 600; }
+  .actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .actions button {
+    border: 1px solid var(--line); background: transparent; color: var(--ink);
+    border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
   .nav, button.nav { background: var(--chip); border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; color: inherit; cursor: pointer; }
-  .nav.on { background: var(--nav-on); color: var(--nav-on-ink); }
-  #theme { margin-left: auto; }
   main { padding: 20px 20px 96px; }
   .panel {
     display: flex; flex-wrap: wrap; align-items: center; gap: 16px 22px;
@@ -75,19 +85,25 @@ try {
 <header>
   <a class="brand" href="/">
     <svg class="logo" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
-      <polygon points="16,3 3,29 16,20.3" fill="#e53935"></polygon>
-      <polygon points="29,29 16,3 16,20.3" fill="#1a73e8"></polygon>
-      <polygon points="3,29 29,29 16,20.3" fill="#f9ab00"></polygon>
+      <rect x="2" y="2" width="16" height="16" rx="3.5" fill="#e53935"></rect>
+      <rect x="8" y="8" width="16" height="16" rx="3.5" fill="#1a73e8"></rect>
+      <rect x="14" y="14" width="16" height="16" rx="3.5" fill="#f9ab00"></rect>
     </svg>
     <h1>Keeps</h1>
   </a>
-  <a class="nav" href="/">Photos</a>
-  <a class="nav" href="/videos">Videos</a>
-  <a class="nav" href="/faces">Faces</a>
-  <a class="nav" href="/categories">Categories</a>
-  <a class="nav on" href="/review">Review</a>
-  <a class="nav" href="/settings">Settings</a>
-  <button id="theme" class="nav" type="button">Light</button>
+  <nav class="tabs" aria-label="Library">
+    <a href="/">Photos</a>
+    <a href="/videos">Videos</a>
+  </nav>
+  <nav class="links" aria-label="More">
+    <a href="/faces">Faces</a>
+    <a href="/categories">Categories</a>
+    <a class="on" href="/review">Review</a>
+    <a href="/settings">Settings</a>
+  </nav>
+  <div class="actions">
+    <button id="theme" type="button">Light</button>
+  </div>
 </header>
 <main>
   <div class="panel">

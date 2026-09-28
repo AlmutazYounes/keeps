@@ -39,6 +39,13 @@ def caption_map():
         conn.close()
 
 
+def clear_for_rerun():
+    conn = connect()
+    conn.execute("DELETE FROM captions")
+    conn.commit()
+    conn.close()
+
+
 def saved_times():
     if not DB_PATH.exists():
         return {}

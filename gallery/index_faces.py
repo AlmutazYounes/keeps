@@ -109,12 +109,18 @@ def main():
         return
     jobs_db.beat("faces", f"{len(pending)} photos are not in the database yet.")
 
-    det = F.session(F.DET_PATH)
-    rec = F.session(F.REC_PATH)
+    det = F.session(F.det_path())
+    rec = F.session(F.rec_path())
     F.CROP_DIR.mkdir(parents=True, exist_ok=True)
     started = time.time()
     new_faces = 0
     for index, path in enumerate(pending, start=1):
+        if jobs_db.read("faces")["state"] == "paused":
+            conn.commit()
+            faces_db.export_metadata(conn)
+            conn.close()
+            print("Paused.", flush=True)
+            return
         rel = str(path.relative_to(F.PHOTOS))
         image = F.load_bgr(path)
         if image is None:

@@ -143,7 +143,7 @@ Do not run `sort_photos.py` for these. That script is only for a fresh `takeout-
 
 Face results and descriptions are saved in their databases. Stopping the gallery does not erase them, and starting it again does not repeat finished photos.
 
-On startup the server compares the folders with those databases. It runs face recognition and descriptions only for still photos that are missing or were changed. Open Settings to see how many are synced, how many are left, and whether a job is in progress.
+On startup the server compares the folders with those databases. It runs face recognition and descriptions only for still photos that are missing or were changed. A job paused in Settings stays paused. Open Settings to pause, continue, or rewrite a database. Rewrite clears that database and runs the model again. A face rewrite also clears names you typed.
 
 1. Put the file under `Photos/`.
 2. Start `gallery/server.py` again.

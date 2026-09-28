@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 import faces_db
+import model_choices
 
 import cv2
 import numpy as np
@@ -16,6 +17,14 @@ MODELS = APP / "models"
 CROP_DIR = APP / "cache" / "faces"
 DET_PATH = MODELS / "10g_bnkps.onnx"
 REC_PATH = MODELS / "arcface_w600k_r50_batch.onnx"
+
+
+def det_path():
+    return model_choices.model_file("faces_detect")
+
+
+def rec_path():
+    return model_choices.model_file("faces_embed")
 
 INPUT_SIZE = (640, 640)
 DET_THRESH = 0.55

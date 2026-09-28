@@ -61,6 +61,11 @@ def main():
     captioner = C.Captioner()
     started = time.time()
     for index, (mtime, path, rel) in enumerate(pending, start=1):
+        if jobs_db.read("captions")["state"] == "paused":
+            conn.commit()
+            conn.close()
+            print("Paused.", flush=True)
+            return
         ok = 1
         try:
             text = captioner.caption_path(path)

@@ -103,6 +103,17 @@ def merge_same_names(conn):
     return merged
 
 
+def clear_for_rerun():
+    conn = connect()
+    conn.execute("DELETE FROM faces")
+    conn.execute("DELETE FROM scanned")
+    conn.execute("DELETE FROM people")
+    conn.execute("DELETE FROM meta")
+    conn.commit()
+    export_metadata(conn)
+    conn.close()
+
+
 def scanned_set():
     if not DB_PATH.exists():
         return set()

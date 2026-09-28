@@ -26,7 +26,7 @@ From the repo root:
 python3 gallery/server.py
 ```
 
-Open http://127.0.0.1:8765. The server scans Photos/ once at startup. A restart reads the face and caption databases and does not repeat a finished still photo. It starts gallery/index_faces.py and gallery/index_captions.py only when gallery/.venv/bin/python exists, and only for still photos that are missing or whose file time changed. It will not start a second copy of a job that is already running.
+Open http://127.0.0.1:8765. The server scans Photos/ once at startup. A restart reads the face and caption databases and does not repeat a finished still photo. It starts gallery/index_faces.py and gallery/index_captions.py only when gallery/.venv/bin/python exists, and only for still photos that are missing or whose file time changed. A job paused in Settings stays paused. It will not start a second copy of a job that is already running.
 
 Create the indexer only when the model files are already in gallery/models/. If the venv exists and the weights do not, the jobs start and fail.
 
@@ -103,10 +103,11 @@ None.
 - gallery/models/ holds ONNX weights.
 - gallery/faces/, gallery/captions/, gallery/jobs/, and gallery/dispose/ are sqlite databases created on first use.
 - gallery/cache/ holds thumbnails and the place-name cache.
+- gallery/carto.key is the free CARTO tile key. It is not in git. See D011.
 - _sort_state.sqlite and _sort.log track a takeout import.
 - docs/ holds this context, the story, and decisions.
 
-Do not commit Photos/, takeout-*.zip, gallery/.venv/, gallery/cache/, gallery/faces/, gallery/captions/, gallery/jobs/, gallery/dispose/, gallery/models/, _sort.log, or _sort_state.sqlite. Do not edit original photo bytes.
+Do not commit Photos/, takeout-*.zip, gallery/.venv/, gallery/cache/, gallery/faces/, gallery/captions/, gallery/jobs/, gallery/dispose/, gallery/models/, gallery/carto.key, _sort.log, or _sort_state.sqlite. Do not edit original photo bytes.
 
 ## Open questions
 

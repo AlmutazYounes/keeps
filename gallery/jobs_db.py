@@ -29,7 +29,9 @@ def connect():
     return conn
 
 
-def beat(name, note, state="running"):
+def beat(name, note, state="running", force=False):
+    if not force and state != "paused" and read(name)["state"] == "paused":
+        return
     conn = connect()
     conn.execute(
         """

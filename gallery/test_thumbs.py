@@ -26,6 +26,33 @@ class ThumbRequestTest(unittest.TestCase):
     def test_missing_socket_counts_as_gone(self):
         self.assertTrue(server.client_gone(None))
 
+    def test_categories_map_asks_for_the_carto_key(self):
+        html = (server.APP / "static" / "categories.html").read_text(encoding="utf-8")
+        self.assertIn('style = dark ? "dark_all" : "rastertiles/voyager"', html)
+        self.assertIn("/{z}/{x}/{y}{r}.png?key=%%CARTO_KEY%%", html)
+        body = server.categories_page().decode()
+        key = server.read_carto_key()
+        self.assertTrue(key)
+        self.assertNotIn("%%CARTO_KEY%%", body)
+        self.assertIn("png?key=" + key, body)
+
+    def test_categories_page_inserts_the_carto_key(self):
+        with tempfile.TemporaryDirectory() as folder:
+            page = Path(folder) / "categories.html"
+            key = Path(folder) / "carto.key"
+            page.write_text("tiles?key=%%CARTO_KEY%%", encoding="utf-8")
+            key.write_text("abc\n", encoding="utf-8")
+            body = server.categories_page(page, key).decode()
+        self.assertEqual(body, "tiles?key=abc")
+
+    def test_categories_page_omits_a_missing_carto_key(self):
+        with tempfile.TemporaryDirectory() as folder:
+            page = Path(folder) / "categories.html"
+            missing = Path(folder) / "carto.key"
+            page.write_text("tiles?key=%%CARTO_KEY%%", encoding="utf-8")
+            body = server.categories_page(page, missing).decode()
+        self.assertEqual(body, "tiles?key=")
+
     def test_leaves_the_original_alone_when_the_browser_left(self):
         with tempfile.TemporaryDirectory() as folder:
             dest = Path(folder) / "1.jpg"

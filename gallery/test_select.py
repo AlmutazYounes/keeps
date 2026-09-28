@@ -35,6 +35,26 @@ class SelectRangeTest(unittest.TestCase):
         self.assertIn("event.shiftKey", html)
         self.assertNotIn("\u2014", html)
 
+    def test_other_pages_use_the_home_header(self):
+        root = Path(__file__).parent / "static"
+        current = {
+            "faces.html": "/faces",
+            "categories.html": "/categories",
+            "review.html": "/review",
+            "settings.html": "/settings",
+        }
+        for name, href in current.items():
+            html = (root / name).read_text()
+            header = html.split("<header>", 1)[1].split("</header>", 1)[0]
+            self.assertIn('class="tabs"', header, name)
+            self.assertIn('class="links"', header, name)
+            self.assertIn('class="actions"', header, name)
+            self.assertIn(".tabs a {", html, name)
+            self.assertIn(".links a {", html, name)
+            self.assertIn(".actions button {", html, name)
+            self.assertNotIn('class="nav"', header, name)
+            self.assertIn(f'class="on" href="{href}"', header, name)
+
 
 if __name__ == "__main__":
     unittest.main()

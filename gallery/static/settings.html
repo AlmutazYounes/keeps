@@ -27,58 +27,128 @@ try {
     display: flex; align-items: center; gap: 16px;
     height: 64px; padding: 0 20px; background: var(--bg); border-bottom: 1px solid var(--line);
   }
-  .brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
+  .brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; margin-right: 4px; }
   .logo { display: block; flex: none; }
   h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.03em; }
   a { color: inherit; text-decoration: none; }
-  .nav, button.nav { background: var(--chip); border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; color: inherit; cursor: pointer; }
-  .nav.on { background: var(--nav-on); color: var(--nav-on-ink); }
-  button.nav { margin-left: auto; }
-  main { max-width: 880px; padding: 28px 20px 64px; }
-  .lead { color: var(--muted); font-size: 15px; line-height: 1.45; margin: 0 0 22px; }
-  .cards { display: grid; gap: 16px; }
-  .card {
-    background: var(--tile); border-radius: 20px; padding: 22px 22px 18px;
+  .tabs { display: flex; align-items: center; padding: 3px; background: var(--chip); border-radius: 999px; }
+  .tabs a { color: var(--ink); text-decoration: none; border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600; }
+  .tabs a.on { background: var(--nav-on); color: var(--nav-on-ink); }
+  .links { display: flex; align-items: center; gap: 14px; }
+  .links a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  .links a:hover, .links a.on { color: var(--ink); }
+  .links a.on { font-weight: 600; }
+  .actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .actions button {
+    border: 1px solid var(--line); background: transparent; color: var(--ink);
+    border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
   }
-  .card h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  main { max-width: 760px; padding: 28px 20px 72px; }
+  .page { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
+  .panel {
+    margin-top: 18px; padding: 18px 20px 8px;
+    border: 1px solid var(--line); border-radius: 16px; background: var(--bg);
+  }
+  .panel-top h2 { margin: 0; font-size: 18px; font-weight: 600; }
+  .note, #status {
+    margin: 6px 0 0; color: var(--muted); font-size: 14px; line-height: 1.45;
+  }
+  .job { padding: 16px 0 14px; }
+  .job + .job { border-top: 1px solid var(--line); }
   .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .head h3 { margin: 0; font-size: 16px; font-weight: 600; }
   .pill {
-    border-radius: 999px; padding: 5px 10px; font-size: 13px; font-weight: 600;
+    border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600;
     background: var(--chip); color: var(--ink);
   }
   .pill.run { background: #1a73e8; color: #fff; }
   .pill.done { background: #137333; color: #fff; }
+  .pill.wait { background: #f9ab00; color: #202124; }
   html.dark .pill.done { background: #81c995; color: #202124; }
-  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 18px; }
-  .stat b { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
-  .stat span { color: var(--muted); font-size: 13px; }
-  .bar { height: 8px; border-radius: 999px; background: var(--chip); margin-top: 18px; overflow: hidden; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .stat b { display: block; font-size: 26px; font-weight: 600; letter-spacing: -0.03em; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .bar { height: 6px; border-radius: 999px; background: var(--chip); margin-top: 14px; overflow: hidden; }
   .bar i { display: block; height: 100%; width: 0; background: #8ab4f8; border-radius: inherit; }
-  .note { margin: 12px 0 0; color: var(--muted); font-size: 14px; line-height: 1.4; }
-  #status { color: var(--muted); }
+  .bar.done i { background: #81c995; }
+  .bar.wait i { background: #f9ab00; }
+  form[hidden] { display: none; }
+  label.model {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+    gap: 8px 18px; align-items: center;
+    margin: 0; padding: 14px 0; border-top: 1px solid var(--line); font-size: 14px;
+  }
+  label.model b { display: block; font-weight: 600; color: var(--ink); }
+  label.model .model-copy > span { display: block; color: var(--muted); font-size: 13px; line-height: 1.4; }
+  label.model select {
+    width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+    border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 14px;
+  }
+  label.model select:focus, #model-save:focus, .sync-actions button:focus {
+    outline: 2px solid #8ab4f8; outline-offset: 2px;
+  }
+  .form-actions { display: flex; justify-content: flex-end; padding: 4px 0 12px; }
+  #model-save {
+    border: 0; background: var(--nav-on); color: var(--nav-on-ink);
+    border-radius: 999px; padding: 8px 16px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  #model-save:disabled { opacity: .55; cursor: default; }
+  .job-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 12px; }
+  .job-foot .note { margin: 0; flex: 1; }
+  .sync-actions { display: flex; gap: 8px; flex: none; }
+  .sync-actions button {
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+    border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .sync-actions button.go { background: var(--nav-on); color: var(--nav-on-ink); border-color: var(--nav-on); }
+  .sync-actions button.quiet { background: transparent; color: var(--muted); border-color: transparent; }
+  .sync-actions button:disabled { opacity: .55; cursor: default; }
+  @media (max-width: 640px) {
+    label.model { grid-template-columns: 1fr; }
+    .job-foot { flex-direction: column; align-items: stretch; }
+  }
 </style>
 </head>
 <body>
 <header>
   <a class="brand" href="/">
     <svg class="logo" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
-      <polygon points="16,3 3,29 16,20.3" fill="#e53935"></polygon>
-      <polygon points="29,29 16,3 16,20.3" fill="#1a73e8"></polygon>
-      <polygon points="3,29 29,29 16,20.3" fill="#f9ab00"></polygon>
+      <rect x="2" y="2" width="16" height="16" rx="3.5" fill="#e53935"></rect>
+      <rect x="8" y="8" width="16" height="16" rx="3.5" fill="#1a73e8"></rect>
+      <rect x="14" y="14" width="16" height="16" rx="3.5" fill="#f9ab00"></rect>
     </svg>
     <h1>Keeps</h1>
   </a>
-  <a class="nav" href="/">Photos</a>
-  <a class="nav" href="/videos">Videos</a>
-  <a class="nav" href="/faces">Faces</a>
-  <a class="nav" href="/categories">Categories</a>
-  <a class="nav" href="/review">Review</a>
-  <a class="nav on" href="/settings">Settings</a>
-  <button id="theme" class="nav" type="button">Light</button>
+  <nav class="tabs" aria-label="Library">
+    <a href="/">Photos</a>
+    <a href="/videos">Videos</a>
+  </nav>
+  <nav class="links" aria-label="More">
+    <a href="/faces">Faces</a>
+    <a href="/categories">Categories</a>
+    <a href="/review">Review</a>
+    <a class="on" href="/settings">Settings</a>
+  </nav>
+  <div class="actions">
+    <button id="theme" type="button">Light</button>
+  </div>
 </header>
 <main>
-  <p class="lead" id="status">Checking the databases...</p>
-  <div class="cards" id="cards" hidden></div>
+  <h2 class="page">Settings</h2>
+  <section class="panel" id="models">
+    <div class="panel-top">
+      <h2>Models</h2>
+      <p class="note" id="models-note">Reading the installed models.</p>
+    </div>
+    <form id="model-form" hidden></form>
+  </section>
+  <section class="panel" id="sync">
+    <div class="panel-top">
+      <h2>Sync</h2>
+      <p id="status">Checking the databases...</p>
+    </div>
+    <div id="cards" hidden></div>
+  </section>
 </main>
 <script>
 const themeBtn = document.getElementById("theme");
@@ -96,30 +166,133 @@ themeBtn.addEventListener("click", () => {
 });
 paintTheme();
 
-function card(title, job) {
+function card(title, name, job) {
   const total = job.total || 0;
   const width = total ? Math.round((job.synced / total) * 100) : 0;
-  const tone = job.running ? "run" : (job.remaining === 0 ? "done" : "");
-  return `<section class="card">
+  const tone = job.running ? "run" : (job.paused ? "wait" : (job.remaining === 0 ? "done" : ""));
+  const pause = job.running
+    ? `<button class="go" type="button" data-sync="${name}" data-action="pause">Pause</button>`
+    : "";
+  const cont = !job.running && (job.paused || job.remaining > 0)
+    ? `<button class="go" type="button" data-sync="${name}" data-action="continue">Continue</button>`
+    : "";
+  const rewrite = `<button class="quiet" type="button" data-sync="${name}" data-action="rewrite">Rewrite</button>`;
+  return `<article class="job">
     <div class="head">
-      <h2>${title}</h2>
-      <div class="pill ${tone}">${job.label}</div>
+      <h3>${escapeText(title)}</h3>
+      <div class="pill ${tone}">${escapeText(job.label || "")}</div>
     </div>
     <div class="stats">
       <div class="stat"><b>${job.synced.toLocaleString()}</b><span>Synced</span></div>
       <div class="stat"><b>${job.remaining.toLocaleString()}</b><span>Remaining</span></div>
       <div class="stat"><b>${total.toLocaleString()}</b><span>Still photos</span></div>
     </div>
-    <div class="bar"><i style="width:${width}%"></i></div>
-    <p class="note">${job.note}</p>
-  </section>`;
+    <div class="bar ${tone}"><i style="width:${width}%"></i></div>
+    <div class="job-foot">
+      <p class="note">${escapeText(job.note || "")}</p>
+      <div class="sync-actions">${pause}${cont}${rewrite}</div>
+    </div>
+  </article>`;
 }
 
-function paint(data) {
-  statusEl.textContent = data.images.toLocaleString() + " still photos are checked against the databases. Finished photos are not run again.";
-  cardsEl.hidden = false;
-  cardsEl.innerHTML = card("Face recognition", data.faces) + card("Photo descriptions", data.captions);
+function escapeText(value) {
+  return String(value).replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[ch]));
 }
+
+function paintModels(roles) {
+  const form = document.getElementById("model-form");
+  const note = document.getElementById("models-note");
+  form.hidden = false;
+  note.textContent = "A job that is already running keeps the model it started with. The next start uses what you save here.";
+  form.innerHTML = roles.map((role) => {
+    const options = (role.options || []).map((option) => {
+      const selected = option.id === role.selected ? " selected" : "";
+      const off = option.installed ? "" : " disabled";
+      const suffix = option.installed ? "" : ", not installed";
+      return `<option value="${escapeText(option.id)}"${selected}${off}>${escapeText(option.label + suffix)}</option>`;
+    }).join("");
+    const empty = options ? "" : `<span>No model is installed for this.</span>`;
+    return `<label class="model">
+      <span class="model-copy"><b>${escapeText(role.title)}</b><span>${escapeText(role.note)}</span>${empty}</span>
+      <select name="${escapeText(role.id)}" aria-label="${escapeText(role.title)}">${options}</select>
+    </label>`;
+  }).join("") + `<div class="form-actions"><button id="model-save" type="submit">Save</button></div>`;
+}
+
+function loadModels() {
+  const note = document.getElementById("models-note");
+  fetch("/api/models")
+    .then((response) => response.ok ? response.json() : null)
+    .then((data) => {
+      if (!data || !data.roles) throw new Error("missing");
+      paintModels(data.roles);
+    })
+    .catch(() => { note.textContent = "Could not read the installed models."; });
+}
+
+document.getElementById("model-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = document.getElementById("model-save");
+  const note = document.getElementById("models-note");
+  const choices = {};
+  form.querySelectorAll("select").forEach((select) => {
+    if (select.value) choices[select.name] = select.value;
+  });
+  button.disabled = true;
+  button.textContent = "Saving";
+  fetch("/api/models", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ choices: choices }),
+  }).then((response) => {
+    if (!response.ok) throw new Error("save failed");
+    return response.json();
+  }).then((data) => {
+    paintModels(data.roles || []);
+    document.getElementById("models-note").textContent = "Saved. The next start uses these models.";
+  }).catch(() => {
+    button.disabled = false;
+    button.textContent = "Save";
+    note.textContent = "Couldn't save those models.";
+  });
+});
+
+function paint(data) {
+  statusEl.textContent = "Pause stops a job. Continue picks up what is left. Rewrite clears that database and runs the model again.";
+  cardsEl.hidden = false;
+  cardsEl.innerHTML = card("Face recognition", "faces", data.faces) + card("Photo descriptions", "captions", data.captions);
+}
+
+cardsEl.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-action]");
+  if (!button || button.disabled) return;
+  const action = button.dataset.action;
+  const job = button.dataset.sync;
+  if (action === "rewrite") {
+    const warning = job === "faces"
+      ? "Rewrite faces? This clears saved faces and the names you typed, then runs the model again."
+      : "Rewrite descriptions? This clears the saved sentences and runs the model again.";
+    if (!window.confirm(warning)) return;
+  }
+  button.disabled = true;
+  fetch("/api/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job: job, action: action }),
+  }).then((response) => {
+    if (!response.ok) throw new Error("sync failed");
+    return response.json();
+  }).then((data) => {
+    if (!data || !data.faces) throw new Error("missing");
+    paint(data);
+  }).catch(() => {
+    button.disabled = false;
+    statusEl.textContent = "Couldn't change that job.";
+  });
+});
 
 function load() {
   fetch("/api/sync")
@@ -134,6 +307,7 @@ function load() {
     .catch(() => { statusEl.textContent = "Could not read sync status."; });
 }
 load();
+loadModels();
 setInterval(load, 3000);
 </script>
 </body>

@@ -3,6 +3,7 @@
 import subprocess
 from pathlib import Path
 
+import model_choices
 import cv2
 import numpy as np
 import onnxruntime as ort
@@ -10,8 +11,6 @@ from tokenizers import Tokenizer
 
 ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
 PHOTOS = ROOT / "Photos"
-MODEL = ROOT / "gallery" / "models" / "florence2"
-ONNX = MODEL / "onnx"
 PROMPT = "Describe with a paragraph what is shown in the image."
 EOS = 2
 MAX_NEW_TOKENS = 64
@@ -65,12 +64,14 @@ def past_from(outputs, names):
 
 class Captioner:
     def __init__(self):
-        self.vision = session(ONNX / "vision_encoder_q4f16.onnx")
-        self.embed = session(ONNX / "embed_tokens_q4f16.onnx")
-        self.encoder = session(ONNX / "encoder_model_q4f16.onnx")
-        self.prefill = session(ONNX / "decoder_model_q4f16.onnx")
-        self.decode = session(ONNX / "decoder_model_merged_q4.onnx")
-        self.tokenizer = Tokenizer.from_file(str(MODEL / "tokenizer.json"))
+        root = model_choices.caption_dir()
+        onnx = root / "onnx"
+        self.vision = session(onnx / "vision_encoder_q4f16.onnx")
+        self.embed = session(onnx / "embed_tokens_q4f16.onnx")
+        self.encoder = session(onnx / "encoder_model_q4f16.onnx")
+        self.prefill = session(onnx / "decoder_model_q4f16.onnx")
+        self.decode = session(onnx / "decoder_model_merged_q4.onnx")
+        self.tokenizer = Tokenizer.from_file(str(root / "tokenizer.json"))
         self.prompt_ids = self.prompt_tokens()
         self.prefill_names = [item.name for item in self.prefill.get_outputs()][1:]
         self.decode_names = [item.name for item in self.decode.get_outputs()][1:]

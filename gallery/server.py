@@ -8,6 +8,8 @@ import json
 import mimetypes
 import os
 import shutil
+import signal
+import time
 import plistlib
 import re
 import socket
@@ -25,6 +27,7 @@ import dispose_lib
 import faces_db
 import jobs_db
 import library_actions
+import model_choices
 import search_lib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -40,6 +43,8 @@ FACES_PAGE = APP / "static" / "faces.html"
 SETTINGS_PAGE = APP / "static" / "settings.html"
 REVIEW_PAGE = APP / "static" / "review.html"
 CATEGORIES_PAGE = APP / "static" / "categories.html"
+CARTO_KEY_PATH = APP / "carto.key"
+CARTO_KEY_MARK = "%%CARTO_KEY%%"
 VENV_PYTHON = APP / ".venv" / "bin" / "python"
 INDEX_JOBS = {
     "faces": "index_faces.py",
@@ -1240,6 +1245,19 @@ def delete_ids(raw_ids):
         return [photo["id"] for photo in removed]
 
 
+def read_carto_key(path=None):
+    key_path = CARTO_KEY_PATH if path is None else path
+    if not key_path.is_file():
+        return ""
+    return key_path.read_text(encoding="utf-8").strip()
+
+
+def categories_page(path=None, key_path=None):
+    page = CATEGORIES_PAGE if path is None else path
+    html = page.read_text(encoding="utf-8")
+    return html.replace(CARTO_KEY_MARK, read_carto_key(key_path)).encode()
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -1280,7 +1298,7 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(200, REVIEW_PAGE.read_bytes(), "text/html; charset=utf-8")
             return
         if path == "/categories":
-            self.respond(200, CATEGORIES_PAGE.read_bytes(), "text/html; charset=utf-8")
+            self.respond(200, categories_page(), "text/html; charset=utf-8")
             return
         if path == "/api/categories":
             if not LIBRARY["ready"]:
@@ -1303,6 +1321,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(503, b'{"ready":false}', "application/json")
                 return
             body = json.dumps(candidate_payload()).encode()
+            self.respond(200, body, "application/json")
+            return
+        if path == "/api/models":
+            body = json.dumps({"roles": model_choices.view()}).encode()
             self.respond(200, body, "application/json")
             return
         if path == "/api/sync":
@@ -1403,6 +1425,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def route_post(self):
         path = urlparse(self.path).path
+        if path == "/api/models":
+            self.save_model_choices()
+            return
+        if path == "/api/sync":
+            self.control_sync_request()
+            return
         if path == "/api/delete":
             self.delete_selected()
             return
@@ -1442,6 +1470,37 @@ class Handler(BaseHTTPRequestHandler):
         if length > 100000:
             return None
         return json.loads(self.rfile.read(length) or b"{}")
+
+    def control_sync_request(self):
+        payload = self.json_body()
+        if payload is None:
+            self.respond(413, b"too large", "text/plain")
+            return
+        try:
+            control_sync(payload.get("job"), payload.get("action"))
+        except ValueError:
+            self.respond(400, b'{"ok":false}', "application/json")
+            return
+        except RuntimeError:
+            body = json.dumps({"ok": False, **sync_payload()}).encode()
+            self.respond(409, body, "application/json")
+            return
+        body = json.dumps({"ok": True, **sync_payload()}).encode()
+        self.respond(200, body, "application/json")
+
+    def save_model_choices(self):
+        payload = self.json_body()
+        if payload is None:
+            self.respond(413, b"too large", "text/plain")
+            return
+        choices = payload.get("choices")
+        try:
+            roles = model_choices.save_choices(choices)
+        except ValueError:
+            self.respond(400, b'{"ok":false}', "application/json")
+            return
+        body = json.dumps({"ok": True, "roles": roles}).encode()
+        self.respond(200, body, "application/json")
 
     def save_photo_edit(self):
         payload = self.json_body()
@@ -1652,25 +1711,33 @@ def script_running(script):
 def job_view(name):
     synced, remaining, total = job_counts(name)
     row = jobs_db.read(name)
+    paused = row["state"] == "paused"
     running = script_running(INDEX_JOBS[name]) or (
         row["state"] == "running" and jobs_db.pid_alive(row["pid"])
     )
-    if remaining == 0:
+    if paused and running:
+        label = "Stopping"
+        note = "Pause was asked. It stops after the current photo."
+    elif paused:
         running = False
-    if remaining == 0:
+        label = "Paused"
+        note = "Paused. Continue picks up photos that are not saved yet."
+    elif remaining == 0:
+        running = False
         label = "Up to date"
-        note = "Saved in the database. A restart does not run this again."
+        note = "Saved in the database. Rewrite runs the model again."
     elif running:
         label = "In progress"
         note = row["note"] or "Working through photos that are not in the database yet."
     else:
         label = "Waiting"
-        note = row["note"] or "New photos will be picked up when the gallery starts."
+        note = "New photos are waiting. Continue starts them."
     return {
         "synced": synced,
         "remaining": remaining,
         "total": total,
         "running": running,
+        "paused": paused,
         "label": label,
         "note": note,
     }
@@ -1684,6 +1751,93 @@ def sync_payload():
     }
 
 
+def indexer_pids(script):
+    result = subprocess.run(
+        ["pgrep", "-fl", script],
+        capture_output=True,
+        text=True,
+    )
+    pids = []
+    for line in result.stdout.splitlines():
+        if script not in line or "server.py" in line or "pgrep" in line:
+            continue
+        token = line.split(None, 1)[0]
+        if token.isdigit():
+            pids.append(int(token))
+    return pids
+
+
+def stop_indexer(script):
+    pids = indexer_pids(script)
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            continue
+    deadline = time.time() + 3
+    while time.time() < deadline and script_running(script):
+        time.sleep(0.1)
+    if script_running(script):
+        for pid in indexer_pids(script):
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                continue
+        time.sleep(0.2)
+    return not script_running(script)
+
+
+def start_indexer(name):
+    script = INDEX_JOBS[name]
+    if script_running(script):
+        return False
+    if not VENV_PYTHON.is_file():
+        jobs_db.beat(name, "The indexer is not installed.", state="idle", force=True)
+        return False
+    subprocess.Popen(
+        [str(VENV_PYTHON), "-u", script],
+        cwd=str(APP),
+        start_new_session=True,
+    )
+    jobs_db.beat(name, "Starting.", state="running", force=True)
+    return True
+
+
+def control_sync(name, action):
+    if name not in INDEX_JOBS or action not in ("pause", "continue", "rewrite"):
+        raise ValueError("bad sync")
+    script = INDEX_JOBS[name]
+    if action == "pause":
+        jobs_db.beat(
+            name,
+            "Paused. Continue picks up photos that are not saved yet.",
+            state="paused",
+            force=True,
+        )
+        stop_indexer(script)
+        return
+    if action == "continue":
+        jobs_db.beat(name, "Continuing.", state="idle", force=True)
+        view = job_view(name)
+        if view["remaining"] and not view["running"]:
+            start_indexer(name)
+        return
+    if not stop_indexer(script):
+        jobs_db.beat(
+            name,
+            "That job is still running. Pause it, then rewrite.",
+            state="paused",
+            force=True,
+        )
+        raise RuntimeError("busy")
+    jobs_db.beat(name, "Clearing the saved rows.", state="idle", force=True)
+    if name == "faces":
+        faces_db.clear_for_rerun()
+    else:
+        captions_db.clear_for_rerun()
+    start_indexer(name)
+
+
 def resume_jobs():
     if not LIBRARY["ready"]:
         return
@@ -1691,20 +1845,15 @@ def resume_jobs():
         view = job_view(name)
         print(
             f"{name}: {view['synced']} synced, {view['remaining']} remaining, "
-            f"running={view['running']}",
+            f"running={view['running']} paused={view['paused']}",
             flush=True,
         )
-        if view["remaining"] == 0 or view["running"]:
+        if view["paused"] or view["remaining"] == 0 or view["running"]:
             continue
-        if not VENV_PYTHON.is_file():
+        if start_indexer(name):
+            print(f"{name}: started {script} for {view['remaining']} photos", flush=True)
+        else:
             print(f"{name}: no indexer at {VENV_PYTHON}", flush=True)
-            continue
-        subprocess.Popen(
-            [str(VENV_PYTHON), "-u", script],
-            cwd=str(APP),
-            start_new_session=True,
-        )
-        print(f"{name}: started {script} for {view['remaining']} photos", flush=True)
 
 
 def main():
