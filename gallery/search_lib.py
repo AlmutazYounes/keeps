@@ -49,9 +49,8 @@ MONTH_DAY_YEAR_RE = re.compile(
 DAY_MONTH_YEAR_RE = re.compile(
     rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({MONTH_ALT})\s+(20\d{{2}})\b"
 )
-MONTH_YEAR_RE = re.compile(rf"\b({MONTH_ALT})\s+(20\d{{2}})\b")
-PREP_YEAR_RE = re.compile(r"\b(?:in|from|during)\s+(20\d{2})\b")
-YEAR_RE = re.compile(r"\b(20\d{2})\b")
+YEAR_TOKEN_RE = re.compile(r"20\d{2}")
+ORDINAL_RE = re.compile(r"^(\d{1,2})(?:st|nd|rd|th)$")
 
 
 def parse_query(text, people=None):
@@ -173,6 +172,7 @@ def _names(people):
 
 
 def _date(lower, consumed):
+    """Read a year, month, and day wherever they sit in the sentence."""
     checks = (
         (MONTH_DAY_YEAR_RE, lambda match: (
             int(match.group(3)),
@@ -184,13 +184,6 @@ def _date(lower, consumed):
             MONTHS[match.group(2)],
             int(match.group(1)),
         )),
-        (MONTH_YEAR_RE, lambda match: (
-            int(match.group(2)),
-            MONTHS[match.group(1)],
-            None,
-        )),
-        (PREP_YEAR_RE, lambda match: (int(match.group(1)), None, None)),
-        (YEAR_RE, lambda match: (int(match.group(1)), None, None)),
     )
     for pattern, picker in checks:
         for match in pattern.finditer(lower):
@@ -202,7 +195,75 @@ def _date(lower, consumed):
                 continue
             _mark(consumed, start, end)
             return year, month, day
-    return None, None, None
+
+    months = []
+    years = []
+    days = []
+    for match in TOKEN_RE.finditer(lower):
+        start, end = match.span()
+        if _taken(consumed, start, end):
+            continue
+        word = match.group()
+        if word in MONTHS:
+            months.append((start, end, MONTHS[word]))
+            continue
+        if YEAR_TOKEN_RE.fullmatch(word):
+            year = int(word)
+            if YEAR_MIN <= year <= YEAR_MAX:
+                years.append((start, end, year))
+            continue
+        number = _day_number(word)
+        if number is not None:
+            days.append((start, end, number))
+
+    if not months and not years:
+        return None, None, None
+
+    month_hit = months[0] if months else None
+    year_hit = years[0] if years else None
+    year = year_hit[2] if year_hit else None
+    month = month_hit[2] if month_hit else None
+    day_hit = None
+    rejected_day = None
+    if month_hit:
+        for candidate in days:
+            if not _beside(lower, month_hit, candidate):
+                continue
+            if _valid_date(year or 2024, month, candidate[2]):
+                day_hit = candidate
+            else:
+                rejected_day = candidate
+            break
+
+    day = day_hit[2] if day_hit else None
+    if month_hit:
+        _mark(consumed, month_hit[0], month_hit[1])
+    if year_hit:
+        _mark(consumed, year_hit[0], year_hit[1])
+    if day_hit:
+        _mark(consumed, day_hit[0], day_hit[1])
+    if rejected_day:
+        _mark(consumed, rejected_day[0], rejected_day[1])
+    return year, month, day
+
+
+def _day_number(word):
+    ordinal = ORDINAL_RE.fullmatch(word)
+    if ordinal:
+        number = int(ordinal.group(1))
+    elif word.isdigit() and len(word) <= 2:
+        number = int(word)
+    else:
+        return None
+    if 1 <= number <= 31:
+        return number
+    return None
+
+
+def _beside(text, left, right):
+    first, second = (left, right) if left[0] <= right[0] else (right, left)
+    gap = text[first[1]:second[0]]
+    return re.fullmatch(r"[^a-z0-9]*", gap) is not None
 
 
 def _valid_date(year, month, day):
