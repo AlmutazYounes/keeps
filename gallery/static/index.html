@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photos</title>
+<script>
+try {
+  if (localStorage.getItem("photos-theme") !== "light") document.documentElement.classList.add("dark");
+} catch (e) {}
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #fff;
+    --ink: #202124;
+    --muted: #5f6368;
+    --line: #e6e8eb;
+    --chip: #f1f3f4;
+    --hover: #e8eaed;
+    --nav-on: #202124;
+    --nav-on-ink: #fff;
+    --field: #fff;
+    --tile: #f1f3f4;
+    --float: rgba(255,255,255,.92);
+  }
+  html.dark {
+    color-scheme: dark;
+    --bg: #202124;
+    --ink: #e8eaed;
+    --muted: #9aa0a6;
+    --line: #3c4043;
+    --chip: #303134;
+    --hover: #3c4043;
+    --nav-on: #e8eaed;
+    --nav-on-ink: #202124;
+    --field: #303134;
+    --tile: #303134;
+    --float: rgba(32,33,36,.92);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 5;
+    display: flex; align-items: center; gap: 16px;
+    height: 64px; padding: 0 20px;
+    background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; margin-right: 4px; }
+  .logo { display: block; flex: none; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.03em; }
+  a.nav, button.nav { color: inherit; text-decoration: none; background: var(--chip); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+  a.nav.on { background: var(--nav-on); color: var(--nav-on-ink); }
+  #count { color: var(--muted); font-size: 14px; white-space: nowrap; }
+  #search {
+    margin-left: auto; width: min(320px, 40vw);
+    border: 0; background: var(--chip); border-radius: 999px;
+    padding: 10px 12px; font: inherit; font-size: 14px; color: inherit;
+  }
+  #search:focus { outline: 2px solid #8ab4f8; background: var(--field); }
+  #facebar {
+    display: none;
+    position: fixed; top: 64px; left: 0; right: 0; z-index: 4;
+    height: 76px; align-items: center; gap: 12px;
+    padding: 0 20px; background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  body.face-on #facebar { display: flex; }
+  #facebar img {
+    width: 52px; height: 52px; border-radius: 50%; object-fit: cover; background: var(--chip);
+  }
+  #face-name {
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; font: inherit; font-size: 14px; width: 180px;
+    background: var(--field); color: inherit;
+  }
+  #face-save, #face-clear {
+    border: 0; border-radius: 999px; padding: 8px 12px;
+    font: inherit; font-size: 13px; cursor: pointer;
+  }
+  #face-save { background: #1a73e8; color: #fff; }
+  #face-clear { background: var(--chip); color: var(--ink); }
+  #memories {
+    display: none;
+    position: fixed; top: 64px; left: 0; right: 0; z-index: 4;
+    height: 184px; align-items: center; background: var(--bg);
+  }
+  body.with-highlights #memories { display: flex; }
+  #highlights {
+    display: flex; flex: 1; gap: 14px; height: 100%;
+    margin: 0; padding: 16px 64px; overflow-x: auto;
+    scroll-behavior: smooth; scrollbar-width: none; background: transparent;
+  }
+  #highlights::-webkit-scrollbar { display: none; }
+  .mem-arrow {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 42px; height: 42px; border: 0; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--chip); color: var(--ink); cursor: pointer; z-index: 2;
+    box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  }
+  .mem-arrow:disabled { opacity: .28; cursor: default; box-shadow: none; }
+  #mem-prev { left: 14px; }
+  #mem-next { right: 14px; }
+  body.with-highlights #years { top: 248px; }
+  body.with-highlights #float { top: 302px; }
+  body.with-highlights #scroller { top: 300px; }
+  .memory {
+    position: relative; flex: none;
+    width: 232px; height: 152px;
+    border: 0; padding: 0; border-radius: 20px;
+    overflow: hidden; cursor: pointer; background: var(--tile);
+  }
+  .memory:hover { outline: 2px solid rgba(138,180,248,.8); outline-offset: 2px; }
+  .memory img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .memory::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 0; height: 64px;
+    background: linear-gradient(transparent, rgba(0,0,0,.62));
+  }
+  .memory span {
+    position: absolute; left: 14px; right: 14px; bottom: 12px; z-index: 1;
+    color: #fff; font-size: 18px; font-weight: 600; text-align: left;
+  }
+  #years {
+    position: fixed; top: 64px; left: 0; right: 0; z-index: 4;
+    display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+    padding: 12px 20px 10px; background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  #years::-webkit-scrollbar { display: none; }
+  #years button, .ghost {
+    border: 0; background: var(--chip); color: var(--ink);
+    border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px;
+    cursor: pointer; white-space: nowrap;
+  }
+  #years button.active, #years button:hover, .ghost:hover { background: var(--hover); }
+  body.face-on #years { top: 140px; }
+  body.face-on #float { top: 194px; }
+  body.face-on #scroller { top: 192px; }
+  #scroller { scrollbar-width: none; }
+  #scroller::-webkit-scrollbar { display: none; }
+  #scrub {
+    position: fixed; top: 116px; right: 0; bottom: 0; z-index: 6;
+    width: 28px;
+  }
+  body.with-highlights #scrub { top: 300px; }
+  body.face-on #scrub { top: 192px; }
+  #scrub-rail {
+    position: absolute; right: 12px; top: 14px; bottom: 14px; width: 4px;
+    border-radius: 4px; background: var(--rail, rgba(32,33,36,.16));
+  }
+  html.dark { --rail: rgba(255,255,255,.16); }
+  #scrub-thumb {
+    position: absolute; right: 8px; width: 12px; min-height: 72px;
+    border-radius: 999px; background: #8ab4f8;
+    box-shadow: 0 0 0 4px rgba(138,180,248,.2);
+  }
+  body.scrub-open #scrub-rail,
+  body.scrub-open #scrub-thumb { display: none; }
+  body.scrub-open #scrub { width: 118px; }
+  body.scrub-open #scrub-thumb { display: none; }
+  #scrub-panel {
+    display: none; position: absolute; inset: 0;
+    background: rgba(32,33,36,.94); color: #fff;
+    border-radius: 14px 0 0 14px;
+  }
+  body.scrub-open #scrub-panel { display: block; }
+  #scrub-years { position: absolute; inset: 0; }
+  #scrub-now, .scrub-year {
+    position: absolute; right: 16px; transform: translateY(-50%);
+    font-size: 13px; white-space: nowrap;
+  }
+  #scrub-now {
+    z-index: 1; font-weight: 600; pointer-events: none;
+    padding-bottom: 2px;
+    border-bottom: 2px solid #8ab4f8;
+  }
+  .scrub-year {
+    border: 0; background: transparent; color: rgba(255,255,255,.78);
+    font: inherit; font-size: 13px; cursor: pointer; padding: 0;
+  }
+  .scrub-year.near { visibility: hidden; }
+  .scrub-year:hover { color: #fff; }
+  #float {
+    position: fixed; top: 118px; left: 20px; z-index: 3;
+    font-size: 14px; font-weight: 600; color: var(--ink);
+    background: var(--float); padding: 4px 0;
+    pointer-events: none;
+  }
+  #scroller { position: fixed; top: 116px; left: 0; right: 0; bottom: 0; overflow: auto; }
+  #canvas { position: relative; }
+  #stage { position: absolute; left: 0; top: 0; right: 0; }
+  .month {
+    position: absolute; left: 16px; right: 16px; height: 36px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    font-size: 16px; font-weight: 600;
+  }
+  .month span { color: var(--muted); font-weight: 500; font-size: 13px; }
+  .cell {
+    position: absolute; padding: 0; border: 0; background: var(--tile);
+    cursor: pointer; overflow: hidden;
+  }
+  .cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .badge {
+    position: absolute; left: 8px; bottom: 8px;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: rgba(0,0,0,.55);
+  }
+  .badge::after {
+    content: "";
+    position: absolute; left: 10px; top: 7px;
+    border-style: solid; border-width: 6px 0 6px 9px;
+    border-color: transparent transparent transparent #fff;
+  }
+  #empty { display: none; padding: 80px 20px; text-align: center; color: var(--muted); }
+  #lb {
+    position: fixed; inset: 0; z-index: 10;
+    background: #000; color: #fff;
+    display: none;
+  }
+  #lb.open { display: block; }
+  #lb-stage {
+    position: absolute; inset: 56px 72px 64px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #lb-stage img, #lb-stage video { max-width: 100%; max-height: 100%; }
+  #lb-caption {
+    position: absolute; left: 20px; right: 20px; bottom: 16px;
+    text-align: center; font-size: 14px; color: #e8eaed;
+  }
+  #lb-close, #lb-prev, #lb-next {
+    position: absolute; z-index: 2;
+    border: 0; background: rgba(255,255,255,.12); color: #fff;
+    width: 40px; height: 40px; border-radius: 50%;
+    font-size: 20px; cursor: pointer;
+  }
+  #lb-close { top: 12px; right: 12px; }
+  #lb-info { top: 12px; right: 60px; display: flex; align-items: center; justify-content: center; }
+  #lb-prev { top: 50%; left: 16px; transform: translateY(-50%); }
+  #lb-next { top: 50%; right: 16px; transform: translateY(-50%); }
+  #lb.info-open #lb-stage { right: 452px; }
+  #lb.info-open #lb-caption { right: 400px; }
+  #lb.info-open #lb-next, #lb.info-open #lb-close { right: 396px; }
+  #lb.info-open #lb-info { display: none; }
+  #info {
+    display: none;
+    position: absolute; top: 0; right: 0; bottom: 0; z-index: 3;
+    width: 380px; overflow: auto;
+    background: #1c1c1e; color: #f1f3f4;
+    padding: 8px 22px 32px;
+  }
+  #lb.info-open #info { display: block; }
+  .info-top { display: flex; align-items: center; gap: 8px; height: 48px; }
+  .info-top h2 { margin: 0; font-size: 18px; font-weight: 500; }
+  .info-top button {
+    width: 36px; height: 36px; border: 0; border-radius: 50%;
+    background: transparent; color: #fff; font-size: 22px; cursor: pointer;
+  }
+  .info-top button:hover { background: rgba(255,255,255,.12); }
+  #info h3 {
+    margin: 22px 0 10px; font-size: 12px; font-weight: 600;
+    letter-spacing: .04em; text-transform: uppercase; color: #9aa0a6;
+  }
+  #info .lead { margin: 8px 0 0; font-size: 15px; line-height: 1.4; }
+  .person-row { display: flex; flex-wrap: wrap; gap: 14px; }
+  a.person { color: inherit; text-decoration: none; cursor: pointer; }
+  .person { width: 84px; text-align: center; font-size: 13px; }
+  .person img {
+    width: 84px; height: 84px; object-fit: cover; border-radius: 12px;
+    background: #2a2a2c; display: block;
+  }
+  .person span { display: block; margin-top: 6px; }
+  .detail { margin: 0 0 16px; }
+  .detail b { display: block; font-size: 16px; font-weight: 500; }
+  .detail span, .detail small { display: block; margin-top: 3px; color: #c4c7c5; font-size: 13px; }
+  .place { margin: 0 0 10px; font-size: 16px; }
+  #info iframe { width: 100%; height: 190px; border: 0; border-radius: 12px; background: #111; }
+  .info-note { color: #9aa0a6; font-size: 14px; }
+  #status { padding: 48px 20px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">
+    <svg class="logo" viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+      <polygon points="16,3 3,29 16,20.3" fill="#e53935"></polygon>
+      <polygon points="29,29 16,3 16,20.3" fill="#1a73e8"></polygon>
+      <polygon points="3,29 29,29 16,20.3" fill="#f9ab00"></polygon>
+    </svg>
+    <h1 id="title">Photos</h1>
+  </a>
+  <a class="nav on" id="tab-photos" href="/">Photos</a>
+  <a class="nav" id="tab-videos" href="/videos">Videos</a>
+  <a class="nav" href="/faces">Faces</a>
+  <div id="count"></div>
+  <button id="theme" class="nav" type="button">Light</button>
+  <input id="search" type="search" placeholder="Search photos" autocomplete="off">
+</header>
+<div id="memories">
+  <button id="mem-prev" class="mem-arrow" type="button" aria-label="Previous memories">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14.5 6 L9 12 L14.5 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+  </button>
+  <div id="highlights"></div>
+  <button id="mem-next" class="mem-arrow" type="button" aria-label="Next memories">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9.5 6 L15 12 L9.5 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+  </button>
+</div>
+<div id="facebar">
+  <img id="face-cover" alt="">
+  <input id="face-name" type="text" placeholder="Name this person" autocomplete="off">
+  <button id="face-save" type="button">Save</button>
+  <a class="nav" href="/faces">All faces</a>
+  <button id="face-clear" type="button">All photos</button>
+</div>
+<nav id="years"></nav>
+<div id="float"></div>
+<div id="scroller">
+  <div id="status">Loading library...</div>
+  <div id="canvas" hidden>
+    <div id="spacer"></div>
+    <div id="stage"></div>
+  </div>
+  <div id="empty">No photos match that search.</div>
+</div>
+<aside id="scrub" hidden>
+  <div id="scrub-rail"></div>
+  <div id="scrub-thumb"></div>
+  <div id="scrub-panel">
+    <div id="scrub-years"></div>
+    <div id="scrub-now"></div>
+  </div>
+</aside>
+<div id="lb">
+  <button id="lb-close" type="button" aria-label="Close">×</button>
+  <button id="lb-info" type="button" aria-label="Info">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"></circle>
+      <path d="M12 11v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+      <circle cx="12" cy="8" r="1.1" fill="currentColor"></circle>
+    </svg>
+  </button>
+  <button id="lb-prev" type="button" aria-label="Previous">‹</button>
+  <button id="lb-next" type="button" aria-label="Next">›</button>
+  <div id="lb-stage"></div>
+  <div id="lb-caption"></div>
+  <aside id="info"></aside>
+</div>
+<script>
+const scroller = document.getElementById("scroller");
+const canvas = document.getElementById("canvas");
+const spacer = document.getElementById("spacer");
+const stage = document.getElementById("stage");
+const yearsEl = document.getElementById("years");
+const highlightsEl = document.getElementById("highlights");
+const memPrev = document.getElementById("mem-prev");
+const memNext = document.getElementById("mem-next");
+const scrub = document.getElementById("scrub");
+const scrubYears = document.getElementById("scrub-years");
+const scrubNow = document.getElementById("scrub-now");
+const scrubThumb = document.getElementById("scrub-thumb");
+const countEl = document.getElementById("count");
+const searchEl = document.getElementById("search");
+const floatEl = document.getElementById("float");
+const emptyEl = document.getElementById("empty");
+const statusEl = document.getElementById("status");
+const lb = document.getElementById("lb");
+const lbStage = document.getElementById("lb-stage");
+const lbCaption = document.getElementById("lb-caption");
+const infoEl = document.getElementById("info");
+
+let captionById = {};
+let allGroups = [];
+let groups = [];
+let namedPeople = [];
+let flat = [];
+let layout = null;
+let lastKey = "";
+let openIndex = -1;
+let frame = 0;
+let scrubSig = "";
+let scrubTimer = 0;
+let scrubHover = false;
+let scrubDrag = false;
+let infoToken = 0;
+let facePersonId = Number(new URLSearchParams(location.search).get("person")) || 0;
+const videosOnly = location.pathname === "/videos";
+if (videosOnly) {
+  document.title = "Videos";
+  document.getElementById("tab-photos").classList.remove("on");
+  document.getElementById("tab-videos").classList.add("on");
+}
+function updateMemArrows() {
+  const max = highlightsEl.scrollWidth - highlightsEl.clientWidth;
+  memPrev.disabled = highlightsEl.scrollLeft <= 2;
+  memNext.disabled = max <= 2 || highlightsEl.scrollLeft >= max - 2;
+}
+memPrev.addEventListener("click", () => {
+  highlightsEl.scrollBy({ left: -246, behavior: "smooth" });
+});
+memNext.addEventListener("click", () => {
+  highlightsEl.scrollBy({ left: 246, behavior: "smooth" });
+});
+highlightsEl.addEventListener("scroll", updateMemArrows);
+const themeBtn = document.getElementById("theme");
+function paintTheme() {
+  const dark = document.documentElement.classList.contains("dark");
+  themeBtn.textContent = dark ? "Light" : "Dark";
+  themeBtn.setAttribute("aria-label", dark ? "Use light theme" : "Use dark theme");
+}
+themeBtn.addEventListener("click", () => {
+  document.documentElement.classList.toggle("dark");
+  localStorage.setItem("photos-theme", document.documentElement.classList.contains("dark") ? "dark" : "light");
+  paintTheme();
+});
+paintTheme();
+let extraPerson = null;
+let libraryReady = false;
+let peopleReady = false;
+
+function escapeText(value) {
+  return value.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]));
+}
+
+function sourceFor(item, large) {
+  const id = item[0];
+  const kind = item[2];
+  if (!large) return "/thumb/" + id;
+  if (kind === "video") return "/media/" + id;
+  if (kind === "convert") return "/view/" + id;
+  return "/media/" + id;
+}
+
+function applyGroups(next) {
+  groups = next;
+  flat = [];
+  groups.forEach((group) => {
+    group.items.forEach((item) => {
+      flat.push({ item, label: group.label });
+    });
+  });
+  lastKey = "";
+  layoutNow();
+}
+
+function layoutNow() {
+  const width = Math.max(280, scroller.clientWidth - 32);
+  const gap = 3;
+  const cols = Math.max(2, Math.floor((width + gap) / 188));
+  const cell = Math.floor((width - gap * (cols - 1)) / cols);
+  const header = 40;
+  let y = 12;
+  const blocks = groups.map((group) => {
+    const rows = Math.ceil(group.items.length / cols);
+    const top = y;
+    const height = header + rows * cell + Math.max(0, rows - 1) * gap + 18;
+    y += height;
+    return { group, top, height, rows, cols, cell, header };
+  });
+  layout = { width, gap, cols, cell, header, total: y + 24, blocks };
+  spacer.style.height = layout.total + "px";
+  canvas.hidden = groups.length === 0;
+  emptyEl.style.display = groups.length === 0 ? "block" : "none";
+  render();
+}
+
+function render() {
+  if (!layout) return;
+  const scroll = scroller.scrollTop;
+  const view = scroller.clientHeight;
+  const parts = [];
+  const ids = [];
+  let label = groups.length ? groups[0].label : "";
+  let year = groups.length ? groups[0].year : "";
+  for (const block of layout.blocks) {
+    if (block.top <= scroll + 8) {
+      label = block.group.label;
+      year = block.group.year;
+    }
+    if (block.top + block.height < scroll - 500) continue;
+    if (block.top > scroll + view + 700) break;
+    if (block.top > scroll + 8) {
+      parts.push(
+        `<div class="month" style="top:${block.top}px">${escapeText(block.group.label)}<span>${block.group.items.length.toLocaleString()}</span></div>`
+      );
+    }
+    const rowH = block.cell + layout.gap;
+    const startRow = Math.max(0, Math.floor((scroll - 700 - (block.top + block.header)) / rowH));
+    const endRow = Math.min(block.rows, Math.ceil((scroll + view + 700 - (block.top + block.header)) / rowH));
+    for (let row = startRow; row < endRow; row++) {
+      for (let col = 0; col < block.cols; col++) {
+        const index = row * block.cols + col;
+        if (index >= block.group.items.length) break;
+        const item = block.group.items[index];
+        const x = 16 + col * (block.cell + layout.gap);
+        const y = block.top + block.header + row * rowH;
+        ids.push(item[0]);
+        const badge = item[2] === "video" ? `<span class="badge"></span>` : "";
+        parts.push(
+          `<button class="cell" data-id="${item[0]}" style="transform:translate(${x}px,${y}px);width:${block.cell}px;height:${block.cell}px"><img src="${sourceFor(item, false)}" alt="">${badge}</button>`
+        );
+      }
+    }
+  }
+  const key = ids.join(",");
+  const active = layout.blocks.find((block) => block.group.label === label);
+  floatEl.textContent = label;
+  floatEl.style.visibility = active && active.top < scroll - 4 ? "visible" : "hidden";
+  syncScrub(label, year);
+  if (key === lastKey) return;
+  lastKey = key;
+  stage.innerHTML = parts.join("");
+  document.querySelectorAll("#years button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.label === label || label.endsWith(button.dataset.year));
+  });
+}
+
+const SCRUB_MONTHS = {
+  January: "Jan", February: "Feb", March: "Mar", April: "Apr",
+  May: "May", June: "Jun", July: "Jul", August: "Aug",
+  September: "Sep", October: "Oct", November: "Nov", December: "Dec",
+  Jan: "Jan", Feb: "Feb", Mar: "Mar", Apr: "Apr", Jun: "Jun",
+  Jul: "Jul", Aug: "Aug", Sep: "Sep", Oct: "Oct", Nov: "Nov", Dec: "Dec",
+};
+
+function scrubCaption(label, year) {
+  const parts = String(label || "").split(/[\s,]+/).filter(Boolean);
+  let month = "";
+  let foundYear = year || "";
+  parts.forEach((part) => {
+    if (SCRUB_MONTHS[part]) month = SCRUB_MONTHS[part];
+    if (/^\d{4}$/.test(part)) foundYear = part;
+  });
+  if (label && label.startsWith("Undated")) return label;
+  if (month && foundYear && foundYear !== "Unknown") return month + " " + foundYear;
+  return foundYear || label || "";
+}
+
+function openScrub() {
+  document.body.classList.add("scrub-open");
+  clearTimeout(scrubTimer);
+  scrubTimer = setTimeout(() => {
+    if (!scrubHover && !scrubDrag) document.body.classList.remove("scrub-open");
+  }, 800);
+}
+
+function syncScrub(label, year) {
+  if (!layout || !layout.blocks.length) {
+    scrub.hidden = true;
+    return;
+  }
+  scrub.hidden = false;
+  const total = Math.max(1, layout.total);
+  const maxScroll = Math.max(1, scroller.scrollHeight - scroller.clientHeight);
+  const ratio = Math.min(1, Math.max(0, scroller.scrollTop / maxScroll));
+  const marks = [];
+  let seen = "";
+  layout.blocks.forEach((block) => {
+    if (block.group.year === seen) return;
+    seen = block.group.year;
+    marks.push({ year: block.group.year, at: block.top / total });
+  });
+  const height = Math.max(1, scrub.clientHeight);
+  const pad = 28;
+  const yFor = (at) => Math.min(height - pad, Math.max(pad, at * height));
+  const sig = height + "|" + marks.map((mark) => mark.year + "@" + Math.round(mark.at * 10000)).join("|");
+  if (sig !== scrubSig) {
+    scrubSig = sig;
+    scrubYears.innerHTML = marks.map((mark) =>
+      `<button type="button" class="scrub-year" data-year="${escapeText(mark.year)}" style="top:${yFor(mark.at)}px">${escapeText(mark.year)}</button>`
+    ).join("");
+  }
+  const nowPx = yFor(ratio);
+  scrubNow.textContent = scrubCaption(label, year);
+  scrubNow.style.top = nowPx + "px";
+  scrubYears.querySelectorAll(".scrub-year").forEach((button) => {
+    const y = parseFloat(button.style.top);
+    button.classList.toggle("near", Math.abs(y - nowPx) < 18);
+  });
+  const travel = Math.max(0, height - 80);
+  scrubThumb.style.top = (8 + ratio * travel) + "px";
+}
+
+function scrubSeek(event) {
+  const rect = scrub.getBoundingClientRect();
+  const ratio = Math.min(1, Math.max(0, (event.clientY - rect.top) / Math.max(1, rect.height)));
+  const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+  scroller.scrollTop = ratio * Math.max(0, maxScroll);
+}
+
+function scrollToYear(year) {
+  const block = layout.blocks.find((entry) => entry.group.year === year);
+  if (!block) return;
+  scroller.scrollTop = block.top;
+}
+
+function buildYears(source) {
+  const seen = [];
+  (source || allGroups).forEach((group) => {
+    if (!seen.includes(group.year)) seen.push(group.year);
+  });
+  yearsEl.innerHTML = seen.map((year) => `<button type="button" data-year="${year}">${year}</button>`).join("");
+}
+
+function node(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text != null) element.textContent = text;
+  return element;
+}
+
+function addDetail(parent, title, sub) {
+  if (!title && !sub) return;
+  const block = node("div", "detail");
+  if (title) block.appendChild(node("b", "", title));
+  if (sub) block.appendChild(node("span", "", sub));
+  parent.appendChild(block);
+}
+
+function renderInfo(data) {
+  infoEl.replaceChildren();
+  const top = node("div", "info-top");
+  const close = node("button", "", "×");
+  close.type = "button";
+  close.setAttribute("aria-label", "Close info");
+  close.addEventListener("click", closeInfo);
+  top.appendChild(close);
+  top.appendChild(node("h2", "", "Info"));
+  infoEl.appendChild(top);
+  if (data.description) infoEl.appendChild(node("p", "lead", data.description));
+  if (data.people && data.people.length) {
+    infoEl.appendChild(node("h3", "", "People"));
+    const row = node("div", "person-row");
+    data.people.forEach((person) => {
+      const card = document.createElement("a");
+      card.className = "person";
+      card.href = "/?person=" + person.id;
+      const image = document.createElement("img");
+      image.src = "/face-box/" + person.face_id;
+      image.alt = person.name || "Unnamed";
+      card.appendChild(image);
+      card.appendChild(node("span", "", person.name || "Unnamed"));
+      row.appendChild(card);
+    });
+    infoEl.appendChild(row);
+  }
+  infoEl.appendChild(node("h3", "", "Details"));
+  addDetail(infoEl, data.date, data.when);
+  addDetail(infoEl, data.camera, data.exposure);
+  const fileLine = [data.pixels, data.dimensions, data.hdr].filter(Boolean).join("  ");
+  addDetail(infoEl, data.name, fileLine);
+  const extra = [data.duration, data.codecs, data.size].filter(Boolean).join("  ");
+  addDetail(infoEl, extra, data.folder);
+  if (data.software) addDetail(infoEl, data.software, "");
+  if (data.altitude) addDetail(infoEl, data.altitude, "Altitude");
+  if (data.latitude == null || data.longitude == null) return;
+  infoEl.appendChild(node("h3", "", "Location"));
+  if (data.place) infoEl.appendChild(node("div", "place", data.place));
+  const pad = 0.012;
+  const bbox = [
+    data.longitude - pad, data.latitude - pad,
+    data.longitude + pad, data.latitude + pad,
+  ].join(",");
+  const frame = document.createElement("iframe");
+  frame.title = "Map";
+  frame.src = "https://www.openstreetmap.org/export/embed.html?bbox="
+    + encodeURIComponent(bbox)
+    + "&layer=mapnik&marker="
+    + encodeURIComponent(data.latitude + "," + data.longitude);
+  infoEl.appendChild(frame);
+}
+
+function loadInfo(id) {
+  const token = ++infoToken;
+  infoEl.replaceChildren(node("p", "info-note", "Reading info..."));
+  fetch("/api/info/" + id)
+    .then((response) => {
+      if (!response.ok) throw new Error("missing");
+      return response.json();
+    })
+    .then((data) => {
+      if (token !== infoToken) return;
+      renderInfo(data);
+    })
+    .catch(() => {
+      if (token !== infoToken) return;
+      infoEl.replaceChildren(node("p", "info-note", "Couldn't read info for this photo."));
+    });
+}
+
+function closeInfo() {
+  lb.classList.remove("info-open");
+  infoToken += 1;
+}
+
+function openInfo() {
+  if (openIndex < 0) return;
+  lb.classList.add("info-open");
+  loadInfo(flat[openIndex].item[0]);
+}
+
+function openAt(id) {
+  const index = flat.findIndex((entry) => entry.item[0] === id);
+  if (index < 0) return;
+  openIndex = index;
+  const entry = flat[index];
+  const item = entry.item;
+  lb.classList.add("open");
+  lbCaption.textContent = item[1];
+  if (item[2] === "video") {
+    lbStage.innerHTML = `<video src="${sourceFor(item, true)}" controls autoplay></video>`;
+  } else {
+    lbStage.innerHTML = `<img src="${sourceFor(item, true)}" alt="">`;
+  }
+  if (lb.classList.contains("info-open")) loadInfo(item[0]);
+}
+
+function closeLb() {
+  lb.classList.remove("open");
+  closeInfo();
+  lbStage.innerHTML = "";
+  openIndex = -1;
+}
+
+function step(delta) {
+  if (openIndex < 0) return;
+  const next = openIndex + delta;
+  if (next < 0 || next >= flat.length) return;
+  openAt(flat[next].item[0]);
+}
+
+stage.addEventListener("click", (event) => {
+  const button = event.target.closest(".cell");
+  if (!button) return;
+  openAt(Number(button.dataset.id));
+});
+yearsEl.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  scrollToYear(button.dataset.year);
+});
+highlightsEl.addEventListener("click", (event) => {
+  const button = event.target.closest(".memory");
+  if (!button || !layout) return;
+  const block = layout.blocks.find((entry) => entry.group.date === button.dataset.date);
+  if (!block) return;
+  scroller.scrollTop = block.top;
+});
+document.getElementById("lb-close").addEventListener("click", closeLb);
+document.getElementById("lb-info").addEventListener("click", openInfo);
+document.getElementById("lb-prev").addEventListener("click", () => step(-1));
+document.getElementById("lb-next").addEventListener("click", () => step(1));
+lb.addEventListener("click", (event) => {
+  if (event.target === lb) closeLb();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    if (lb.classList.contains("info-open")) closeInfo();
+    else closeLb();
+    return;
+  }
+  if (!lb.classList.contains("open")) return;
+  if (event.key === "ArrowLeft") step(-1);
+  if (event.key === "ArrowRight") step(1);
+});
+scroller.addEventListener("scroll", () => {
+  openScrub();
+  if (frame) return;
+  frame = requestAnimationFrame(() => {
+    frame = 0;
+    render();
+  });
+});
+scrub.addEventListener("mouseenter", () => {
+  scrubHover = true;
+  document.body.classList.add("scrub-open");
+});
+scrub.addEventListener("mouseleave", () => {
+  scrubHover = false;
+  if (!scrubDrag) document.body.classList.remove("scrub-open");
+});
+scrub.addEventListener("pointerdown", (event) => {
+  if (event.target.closest(".scrub-year")) return;
+  scrubDrag = true;
+  openScrub();
+  scrub.setPointerCapture(event.pointerId);
+  scrubSeek(event);
+});
+scrub.addEventListener("pointermove", (event) => {
+  if (!scrubDrag) return;
+  scrubSeek(event);
+});
+scrub.addEventListener("pointerup", () => {
+  scrubDrag = false;
+  openScrub();
+});
+scrub.addEventListener("pointercancel", () => {
+  scrubDrag = false;
+});
+scrubYears.addEventListener("click", (event) => {
+  const button = event.target.closest(".scrub-year");
+  if (!button) return;
+  scrollToYear(button.dataset.year);
+});
+window.addEventListener("resize", () => layoutNow());
+function currentPerson() {
+  const listed = namedPeople.find((person) => person.id === facePersonId);
+  if (listed) return listed;
+  if (extraPerson && extraPerson.id === facePersonId) return extraPerson;
+  return null;
+}
+
+function showFaceBar() {
+  const person = currentPerson();
+  if (!facePersonId) {
+    document.body.classList.remove("face-on");
+    return;
+  }
+  document.body.classList.add("face-on");
+  if (!person) return;
+  document.getElementById("face-cover").src = person.cover || "";
+  const name = document.getElementById("face-name");
+  if (document.activeElement !== name) name.value = person.name || "";
+}
+
+function dayLabel(iso) {
+  const parts = iso.split("-");
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+  const date = new Date(year, month - 1, day);
+  const week = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getDay()];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const head = week + ", " + months[month - 1] + " " + day;
+  if (year === new Date().getFullYear()) return head;
+  return head + ", " + year;
+}
+
+function expandDays(groups) {
+  const next = [];
+  groups.forEach((group) => {
+    let current = null;
+    group.items.forEach((item) => {
+      const date = item[3] || "";
+      if (!current || current.date !== date) {
+        current = {
+          year: group.year,
+          month: group.month,
+          date: date,
+          label: date ? dayLabel(date) : group.label,
+          items: [],
+        };
+        next.push(current);
+      }
+      current.items.push(item);
+    });
+  });
+  return next;
+}
+
+let highlightsKey = "";
+
+function renderHighlights() {
+  const query = searchEl.value.trim();
+  const show = !videosOnly && !facePersonId && !query && allGroups.length;
+  if (!show) {
+    document.body.classList.remove("with-highlights");
+    return;
+  }
+  const used = new Set();
+  const cards = [];
+  const today = new Date();
+  [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20].forEach((ago) => {
+    const want = new Date(today.getFullYear() - ago, today.getMonth(), today.getDate());
+    let best = null;
+    let bestDist = 8;
+    allGroups.forEach((group) => {
+      if (!group.date || used.has(group.date)) return;
+      const parts = group.date.split("-").map(Number);
+      const when = new Date(parts[0], parts[1] - 1, parts[2]);
+      const dist = Math.abs(when - want) / 86400000;
+      if (dist < bestDist) {
+        best = group;
+        bestDist = dist;
+      }
+    });
+    if (!best) return;
+    const item = best.items.find((entry) => entry[2] !== "video") || best.items[0];
+    if (!item) return;
+    used.add(best.date);
+    cards.push({
+      date: best.date,
+      id: item[0],
+      label: ago === 1 ? "1 year ago" : ago + " years ago",
+    });
+  });
+  if (!cards.length) {
+    document.body.classList.remove("with-highlights");
+    return;
+  }
+  document.body.classList.add("with-highlights");
+  const key = cards.map((card) => card.date).join(",");
+  if (key !== highlightsKey) {
+    highlightsKey = key;
+    highlightsEl.innerHTML = cards.map((card) => `
+      <button type="button" class="memory" data-date="${card.date}">
+        <img src="/thumb/${card.id}" alt="">
+        <span>${escapeText(card.label)}</span>
+      </button>
+    `).join("");
+  }
+  requestAnimationFrame(updateMemArrows);
+}
+
+function videoGroups(groups) {
+  if (!videosOnly) return groups;
+  return groups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => item[2] === "video"),
+  })).filter((group) => group.items.length);
+}
+
+function countLabel(total, filtered) {
+  if (!filtered && !videosOnly) return total.toLocaleString() + " items";
+  const noun = videosOnly ? "video" : "photo";
+  const word = total === 1 ? noun : noun + "s";
+  return total.toLocaleString() + " " + word;
+}
+
+function applyView() {
+  if (!libraryReady) return;
+  if (facePersonId && !peopleReady) return;
+  const person = currentPerson();
+  showFaceBar();
+  const query = searchEl.value.trim().toLowerCase();
+  let source = videoGroups(allGroups);
+  if (facePersonId && !person) {
+    applyGroups([]);
+    buildYears([]);
+    countEl.textContent = countLabel(0, true);
+    emptyEl.textContent = videosOnly ? "No videos for this face." : "No photos for this face.";
+    return;
+  }
+  if (person) {
+    const ids = new Set(person.ids || []);
+    source = source.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => ids.has(item[0])),
+    })).filter((group) => group.items.length);
+  }
+  if (query) {
+    const faceIds = new Set();
+    if (!person) {
+      namedPeople.forEach((item) => {
+        if (!item.name || !item.name.toLowerCase().includes(query)) return;
+        (item.ids || item.photos.map((photo) => photo.id)).forEach((id) => {
+          if (id) faceIds.add(id);
+        });
+      });
+    }
+    source = source.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        const caption = (captionById[item[0]] || "").toLowerCase();
+        return item[1].toLowerCase().includes(query) || caption.includes(query) || faceIds.has(item[0]);
+      }),
+    })).filter((group) => group.items.length);
+  }
+  if (person) emptyEl.textContent = videosOnly ? "No videos for this face." : "No photos for this face.";
+  else emptyEl.textContent = videosOnly ? "No videos match that search." : "No photos match that search.";
+  applyGroups(source);
+  const total = source.reduce((sum, group) => sum + group.items.length, 0);
+  countEl.textContent = countLabel(total, Boolean(person || query));
+  buildYears(source);
+  renderHighlights();
+}
+
+function loadFacePerson() {
+  if (!facePersonId || currentPerson()) {
+    applyView();
+    return;
+  }
+  fetch("/api/people/" + facePersonId)
+    .then((response) => response.ok ? response.json() : null)
+    .then((data) => {
+      extraPerson = data;
+      applyView();
+    })
+    .catch(() => applyView());
+}
+
+searchEl.addEventListener("input", () => {
+  applyView();
+  scroller.scrollTop = 0;
+});
+
+document.getElementById("face-clear").addEventListener("click", () => {
+  facePersonId = 0;
+  extraPerson = null;
+  history.pushState({}, "", videosOnly ? "/videos" : "/");
+  applyView();
+  scroller.scrollTop = 0;
+});
+
+document.getElementById("face-save").addEventListener("click", () => {
+  if (!facePersonId) return;
+  const button = document.getElementById("face-save");
+  const name = document.getElementById("face-name").value.trim();
+  button.textContent = "Saving";
+  fetch("/api/people/" + facePersonId, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  }).then((response) => response.json()).then((data) => {
+    if (data.merged_into) {
+      location.href = "/?person=" + data.merged_into;
+      return;
+    }
+    const person = currentPerson();
+    if (person) person.name = data.name || "";
+    button.textContent = "Saved";
+    setTimeout(() => { button.textContent = "Save"; }, 800);
+  }).catch(() => { button.textContent = "Save"; });
+});
+
+fetch("/api/people").then((response) => response.json()).then((data) => {
+  namedPeople = data.people || [];
+  peopleReady = true;
+  loadFacePerson();
+}).catch(() => {
+  peopleReady = true;
+  loadFacePerson();
+});
+
+function loadCaptions() {
+  fetch("/api/captions")
+    .then((response) => response.ok ? response.json() : null)
+    .then((data) => {
+      if (!data || !data.by_id) return;
+      captionById = data.by_id;
+      if (searchEl.value.trim()) applyView();
+    })
+    .catch(() => {});
+}
+loadCaptions();
+setInterval(loadCaptions, 20000);
+
+fetch("/api/library")
+  .then((response) => response.json())
+  .then((data) => {
+    allGroups = expandDays(data.groups);
+    libraryReady = true;
+    statusEl.hidden = true;
+    countEl.textContent = data.count.toLocaleString() + " items";
+    applyView();
+  })
+  .catch(() => {
+    statusEl.textContent = "Could not load the library.";
+  });
+</script>
+</body>
+</html>
