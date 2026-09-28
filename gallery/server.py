@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 import captions_db
 import candidates
 import categories
+import dispose_db
+import dispose_lib
 import faces_db
 import jobs_db
 import library_actions
@@ -1003,6 +1005,97 @@ def _kind_card(ids):
     return {"count": len(ids), "cover": ids[0] if ids else None}
 
 
+DISPOSE_SCRIPT = "index_dispose.py"
+
+
+def named_face_paths():
+    if not faces_db.DB_PATH.exists():
+        return set()
+    conn = faces_db.connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT f.relpath
+            FROM faces f
+            JOIN people p ON p.id = f.person_id
+            WHERE trim(p.name) != ''
+            """
+        )
+        return {row[0] for row in rows}
+    finally:
+        conn.close()
+
+
+def dispose_running():
+    row = jobs_db.read("dispose")
+    return script_running(DISPOSE_SCRIPT) or (
+        row["state"] == "running" and jobs_db.pid_alive(row["pid"])
+    )
+
+
+def start_dispose():
+    if dispose_running():
+        return "running"
+    if not VENV_PYTHON.is_file():
+        return "no-indexer"
+    subprocess.Popen(
+        [str(VENV_PYTHON), "-u", str(APP / DISPOSE_SCRIPT)],
+        cwd=str(APP),
+        start_new_session=True,
+    )
+    return "started"
+
+
+def review_payload(level):
+    if level not in dispose_lib.LEVELS:
+        level = "normal"
+    texts = captions_db.caption_map() if captions_db.DB_PATH.exists() else {}
+    scores = dispose_db.score_map()
+    named = named_face_paths()
+    faced = set()
+    if faces_db.DB_PATH.exists():
+        conn = faces_db.connect()
+        try:
+            faced = {row[0] for row in conn.execute("SELECT DISTINCT relpath FROM faces")}
+        finally:
+            conn.close()
+    waiting = 0
+    kept = 0
+    items = []
+    for photo in LIBRARY["by_id"].values():
+        if photo["kind"] == "video":
+            continue
+        row = scores.get(photo["rel"])
+        if row is None:
+            waiting += 1
+            continue
+        sharp, spread, _mtime = row
+        caption = texts.get(photo["rel"]) or ""
+        caption_reason = candidates.reason_for(photo["name"], caption, photo["rel"] in faced)
+        power = dispose_lib.strength_for(sharp, spread)
+        if not dispose_lib.visible(level, power, photo["rel"] in named, bool(caption_reason)):
+            kept += 1
+            continue
+        items.append({
+            "id": photo["id"],
+            "reason": dispose_lib.reason_for(sharp, spread, caption_reason),
+            "strength": power,
+        })
+    items.sort(key=lambda item: (-item["strength"], item["id"]))
+    shown = len(items)
+    row = jobs_db.read("dispose")
+    return {
+        "level": level,
+        "running": dispose_running(),
+        "note": row["note"],
+        "scanned": len(scores),
+        "waiting": waiting,
+        "shown": shown,
+        "kept": kept,
+        "items": items[:400],
+    }
+
+
 def candidate_payload():
     texts = captions_db.caption_map() if captions_db.DB_PATH.exists() else {}
     faced = set()
@@ -1115,6 +1208,15 @@ class Handler(BaseHTTPRequestHandler):
             body = json.dumps(category_payload()).encode()
             self.respond(200, body, "application/json")
             return
+        if path == "/api/review":
+            if not LIBRARY["ready"]:
+                self.respond(503, b'{"ready":false}', "application/json")
+                return
+            params = parse_qs(urlparse(self.path).query)
+            level = (params.get("level") or ["normal"])[0]
+            body = json.dumps(review_payload(level)).encode()
+            self.respond(200, body, "application/json")
+            return
         if path == "/api/candidates":
             if not LIBRARY["ready"]:
                 self.respond(503, b'{"ready":false}', "application/json")
@@ -1222,6 +1324,13 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/delete":
             self.delete_selected()
+            return
+        if path == "/api/review/start":
+            status = start_dispose()
+            if status == "no-indexer":
+                self.respond(400, b'{"ok":false}', "application/json")
+                return
+            self.respond(200, json.dumps({"ok": True, "status": status}).encode(), "application/json")
             return
         if not path.startswith("/api/people/"):
             self.respond(404, b"not found", "text/plain")

@@ -91,7 +91,7 @@ Videos are not given descriptions, and faces are not saved for them. A video sea
 
 Choose Select, then tap photos or videos. Share sends those files to the system share sheet. Delete asks first, then moves the files to Trash and takes them off the grid. The open photo has the same two actions.
 
-Review lists still photos that look disposable: a screenshot, a document, or a blurry frame with no person. A photo with no description yet is left alone. Nothing is deleted until you choose Delete there.
+Review is a dashboard for photos that look disposable. You start the check. It looks at the picture, then lists the strongest matches with a reason. Careful, balanced, and aggressive change which photos appear. A careful pass leaves named people off the list. Nothing is deleted until you choose Delete.
 
 ## Categories
 

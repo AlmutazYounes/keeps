@@ -111,4 +111,4 @@ Do not run it for a file you dropped straight into `Photos/`. For that file, res
 
 ## Do not commit
 
-Do not commit `Photos/`, `takeout-*.zip`, `gallery/.venv/`, `gallery/cache/`, `gallery/faces/`, `gallery/captions/`, `gallery/jobs/`, `gallery/models/`, `_sort.log`, or `_sort_state.sqlite`. Do not edit original photo bytes.
+Do not commit `Photos/`, `takeout-*.zip`, `gallery/.venv/`, `gallery/cache/`, `gallery/faces/`, `gallery/captions/`, `gallery/jobs/`, `gallery/dispose/`, `gallery/models/`, `_sort.log`, or `_sort_state.sqlite`. Do not edit original photo bytes.
