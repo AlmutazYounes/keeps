@@ -13,40 +13,62 @@ try {
   :root {
     color-scheme: light;
     --bg: #fff; --ink: #202124; --muted: #5f6368; --line: #e6e8eb; --chip: #f1f3f4;
-    --nav-on: #202124; --nav-on-ink: #fff; --tile: #f1f3f4;
+    --nav-on: #202124; --nav-on-ink: #fff; --tile: #f1f3f4; --float: rgba(255,255,255,.96);
   }
   html.dark {
     color-scheme: dark;
     --bg: #202124; --ink: #e8eaed; --muted: #9aa0a6; --line: #3c4043; --chip: #303134;
-    --nav-on: #e8eaed; --nav-on-ink: #202124; --tile: #303134;
+    --nav-on: #e8eaed; --nav-on-ink: #202124; --tile: #303134; --float: rgba(32,33,36,.96);
   }
   * { box-sizing: border-box; }
   body { margin: 0; color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); }
   header {
-    position: sticky; top: 0; z-index: 2;
+    position: sticky; top: 0; z-index: 3;
     display: flex; align-items: center; gap: 16px;
     height: 64px; padding: 0 20px; background: var(--bg); border-bottom: 1px solid var(--line);
   }
   .brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; }
+  .logo { display: block; flex: none; }
   h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.03em; }
   a { color: inherit; text-decoration: none; }
   .nav, button.nav { background: var(--chip); border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; color: inherit; cursor: pointer; }
   .nav.on { background: var(--nav-on); color: var(--nav-on-ink); }
   #theme { margin-left: auto; }
-  main { padding: 20px 20px 80px; }
-  .lead { color: var(--muted); font-size: 15px; line-height: 1.45; margin: 0 0 16px; max-width: 720px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
-  .card { position: relative; border: 0; padding: 0; background: var(--tile); cursor: pointer; text-align: left; color: inherit; }
-  .card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
-  .card span { display: block; padding: 8px 10px 10px; font-size: 13px; font-weight: 600; }
-  .card.picked { outline: 3px solid #1a73e8; }
-  #bar {
+  main { padding: 20px 20px 96px; }
+  .panel {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px 22px;
+    margin: 0 0 18px; padding: 14px 16px;
+    background: var(--chip); border-radius: 16px;
+  }
+  .stats { display: flex; gap: 18px; }
+  .stats div { display: flex; flex-direction: column; }
+  .stats strong { font-size: 20px; font-weight: 600; }
+  .stats span { color: var(--muted); font-size: 12px; }
+  .level { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+  .level input { width: 140px; accent-color: #1a73e8; }
+  .level b { font-size: 14px; min-width: 88px; }
+  #run { background: #1a73e8; color: #fff; }
+  #run:disabled { opacity: .55; cursor: default; }
+  .note { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+  h2 { display: flex; align-items: center; gap: 10px; font-size: 15px; margin: 22px 0 10px; }
+  h2 button { border: 0; background: transparent; color: #1a73e8; font: inherit; font-size: 13px; cursor: pointer; padding: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .card { position: relative; border: 0; padding: 0; background: var(--tile); cursor: pointer; text-align: left; color: inherit; border-radius: 14px; overflow: hidden; }
+  .card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--tile); }
+  .card .meta { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px 10px; font-size: 13px; }
+  .card .meta b { font-weight: 600; }
+  .card .meta span { color: var(--muted); }
+  .bar { height: 3px; background: var(--line); }
+  .bar i { display: block; height: 100%; background: #e53935; }
+  .card.picked { outline: 3px solid #1a73e8; outline-offset: -3px; }
+  #dock {
     display: none; position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
-    align-items: center; gap: 8px; padding: 8px 10px 8px 16px;
-    background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+    z-index: 4; align-items: center; gap: 8px; padding: 8px 10px 8px 16px;
+    background: var(--float); border: 1px solid var(--line); border-radius: 999px;
     box-shadow: 0 8px 24px rgba(0,0,0,.18);
   }
-  body.picking #bar { display: flex; }
+  body.picking #dock { display: flex; }
+  #picked { font-size: 14px; font-weight: 600; margin-right: 6px; }
 </style>
 </head>
 <body>
@@ -68,23 +90,42 @@ try {
   <button id="theme" class="nav" type="button">Light</button>
 </header>
 <main>
-  <p class="lead" id="status">Looking for photos that might not be worth keeping...</p>
-  <div class="grid" id="grid"></div>
+  <div class="panel">
+    <div class="stats">
+      <div><strong id="stat-shown">0</strong><span>Shown</span></div>
+      <div><strong id="stat-kept">0</strong><span>Kept</span></div>
+      <div><strong id="stat-wait">0</strong><span>Waiting</span></div>
+    </div>
+    <label class="level">Aggressiveness
+      <input id="level" type="range" min="0" max="2" step="1" value="1" aria-label="Aggressiveness">
+      <b id="level-name">Balanced</b>
+    </label>
+    <button id="run" class="nav" type="button">Run check</button>
+  </div>
+  <p class="note" id="status">Run a check when you want the photos scored. Nothing is deleted until you choose Delete.</p>
+  <div id="groups"></div>
 </main>
-<div id="bar">
-  <span id="count">0 items</span>
+<div id="dock">
+  <span id="picked">0 items</span>
   <button id="delete" class="nav" type="button">Delete</button>
   <button id="clear" class="nav" type="button">Clear</button>
 </div>
 <script>
+const LEVELS = ["careful", "normal", "aggressive"];
+const LEVEL_NAMES = ["Careful", "Balanced", "Aggressive"];
 const themeBtn = document.getElementById("theme");
 const statusEl = document.getElementById("status");
-const grid = document.getElementById("grid");
+const groupsEl = document.getElementById("groups");
+const levelEl = document.getElementById("level");
+const runBtn = document.getElementById("run");
 const picked = new Set();
+let items = [];
+let order = [];
+let anchor = -1;
+let poll = 0;
 
 function paintTheme() {
-  const dark = document.documentElement.classList.contains("dark");
-  themeBtn.textContent = dark ? "Light" : "Dark";
+  themeBtn.textContent = document.documentElement.classList.contains("dark") ? "Light" : "Dark";
 }
 themeBtn.addEventListener("click", () => {
   document.documentElement.classList.toggle("dark");
@@ -93,38 +134,129 @@ themeBtn.addEventListener("click", () => {
 });
 paintTheme();
 
-function paintBar() {
-  document.body.classList.toggle("picking", picked.size > 0);
-  document.getElementById("count").textContent = picked.size + (picked.size === 1 ? " item" : " items");
+function escapeText(value) {
+  return String(value).replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[ch]));
 }
 
-function paint(items) {
-  grid.innerHTML = "";
-  items.forEach((item) => {
-    const card = document.createElement("button");
-    card.type = "button";
-    card.className = "card";
-    card.innerHTML = '<img alt=""><span></span>';
-    card.querySelector("img").src = "/thumb/" + item.id;
-    card.querySelector("span").textContent = item.reason;
-    card.addEventListener("click", () => {
-      if (picked.has(item.id)) {
-        picked.delete(item.id);
-        card.classList.remove("picked");
-      } else {
-        picked.add(item.id);
-        card.classList.add("picked");
-      }
-      paintBar();
-    });
-    grid.appendChild(card);
+function paintDock() {
+  document.body.classList.toggle("picking", picked.size > 0);
+  document.getElementById("picked").textContent = picked.size + (picked.size === 1 ? " item" : " items");
+  groupsEl.querySelectorAll(".card").forEach((card) => {
+    card.classList.toggle("picked", picked.has(Number(card.dataset.id)));
   });
 }
 
+function paint(data) {
+  items = data.items || [];
+  document.getElementById("stat-shown").textContent = Number(data.shown || 0).toLocaleString();
+  document.getElementById("stat-kept").textContent = Number(data.kept || 0).toLocaleString();
+  document.getElementById("stat-wait").textContent = Number(data.waiting || 0).toLocaleString();
+  const name = LEVEL_NAMES[LEVELS.indexOf(data.level)] || "Balanced";
+  document.getElementById("level-name").textContent = name;
+  runBtn.disabled = Boolean(data.running);
+  runBtn.textContent = data.running ? "Running" : "Run check";
+  if (!data.scanned) {
+    statusEl.textContent = data.running
+      ? "Looking at the photos. This page updates as scores come in."
+      : "Run a check when you want the photos scored. Nothing is deleted until you choose Delete.";
+  } else if (data.running) {
+    statusEl.textContent = data.note || ("A check is in progress. " + Number(data.scanned).toLocaleString() + " photos are scored so far.");
+  } else if (!data.shown) {
+    statusEl.textContent = "Nothing at this setting. Move aggressiveness if you want a wider pass.";
+  } else if (data.shown > items.length) {
+    statusEl.textContent = "Showing the strongest " + items.length.toLocaleString() + " of " + Number(data.shown).toLocaleString() + ".";
+  } else {
+    statusEl.textContent = "Select photos, or a whole reason, then delete. Trash asks before anything moves.";
+  }
+  const groups = new Map();
+  items.forEach((item) => {
+    const list = groups.get(item.reason) || [];
+    list.push(item);
+    groups.set(item.reason, list);
+  });
+  order = [];
+  groupsEl.innerHTML = [...groups.entries()].map(([reason, list]) => {
+    const cards = list.map((item) => {
+      const index = order.length;
+      order.push(item);
+      const on = picked.has(item.id) ? " picked" : "";
+      return `<button class="card${on}" type="button" data-id="${item.id}" data-index="${index}">
+        <img src="/thumb/${item.id}" alt="">
+        <div class="bar"><i style="width:${Math.max(4, Math.min(100, item.strength))}%"></i></div>
+        <div class="meta"><b>${escapeText(item.reason)}</b><span>${item.strength}</span></div>
+      </button>`;
+    }).join("");
+    return `<h2>${escapeText(reason)} <button type="button" data-reason="${escapeText(reason)}">Select these</button></h2><div class="grid">${cards}</div>`;
+  }).join("");
+  paintDock();
+  if (data.running && !poll) poll = setInterval(load, 3000);
+  if (!data.running && poll) {
+    clearInterval(poll);
+    poll = 0;
+  }
+}
+
+function load() {
+  const level = LEVELS[Number(levelEl.value)] || "normal";
+  fetch("/api/review?level=" + level)
+    .then((response) => response.json())
+    .then(paint)
+    .catch(() => { statusEl.textContent = "Couldn't read the review list."; });
+}
+
+groupsEl.addEventListener("click", (event) => {
+  const groupBtn = event.target.closest("h2 button");
+  if (groupBtn) {
+    const reason = groupBtn.dataset.reason;
+    items.forEach((item) => {
+      if (item.reason === reason) picked.add(item.id);
+    });
+    paintDock();
+    return;
+  }
+  const card = event.target.closest(".card");
+  if (!card) return;
+  const id = Number(card.dataset.id);
+  const index = Number(card.dataset.index);
+  if (event.shiftKey && anchor >= 0) {
+    const start = Math.min(anchor, index);
+    const end = Math.max(anchor, index);
+    for (let i = start; i <= end; i++) picked.add(order[i].id);
+  } else if (picked.has(id)) {
+    picked.delete(id);
+    anchor = index;
+  } else {
+    picked.add(id);
+    anchor = index;
+  }
+  paintDock();
+});
+
+levelEl.addEventListener("input", () => {
+  document.getElementById("level-name").textContent = LEVEL_NAMES[Number(levelEl.value)] || "Balanced";
+  load();
+});
+
+runBtn.addEventListener("click", () => {
+  runBtn.disabled = true;
+  fetch("/api/review/start", { method: "POST" })
+    .then((response) => {
+      if (!response.ok) throw new Error("start failed");
+      return response.json();
+    })
+    .then(() => load())
+    .catch(() => {
+      runBtn.disabled = false;
+      statusEl.textContent = "The check needs the indexer environment before it can run.";
+    });
+});
+
 document.getElementById("clear").addEventListener("click", () => {
   picked.clear();
-  grid.querySelectorAll(".card").forEach((card) => card.classList.remove("picked"));
-  paintBar();
+  anchor = -1;
+  paintDock();
 });
 
 document.getElementById("delete").addEventListener("click", () => {
@@ -132,33 +264,24 @@ document.getElementById("delete").addEventListener("click", () => {
   if (!ids.length) return;
   const noun = ids.length === 1 ? "this photo" : ids.length + " photos";
   if (!window.confirm("Move " + noun + " to Trash?")) return;
-  fetch("/api/delete", {
+  const batches = [];
+  for (let i = 0; i < ids.length; i += 200) batches.push(ids.slice(i, i + 200));
+  Promise.all(batches.map((batch) => fetch("/api/delete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify({ ids: batch }),
   }).then((response) => {
     if (!response.ok) throw new Error("delete failed");
-    return response.json();
-  }).then(() => {
+  }))).then(() => {
     picked.clear();
-    paintBar();
+    anchor = -1;
+    paintDock();
     load();
   }).catch(() => {
     statusEl.textContent = "Couldn't move those photos to Trash.";
   });
 });
 
-function load() {
-  fetch("/api/candidates").then((response) => response.json()).then((data) => {
-    const items = data.items || [];
-    statusEl.textContent = items.length
-      ? items.length + " photos look disposable. Select any you want to move to Trash. A photo with no description yet is not listed."
-      : "No disposable photos in the descriptions saved so far.";
-    paint(items);
-  }).catch(() => {
-    statusEl.textContent = "Couldn't read the review list.";
-  });
-}
 load();
 </script>
 </body>
