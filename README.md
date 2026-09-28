@@ -24,11 +24,17 @@ Search matches the file name, a person's name, and the description once a photo 
 
 ## Sort a takeout
 
+Run this only after you download a Google Takeout. It is not part of the gallery, and you do not run it for photos that are already in `Photos/`.
+
+Put the Takeout archives in the library folder. The script looks only for files named `takeout-*.zip`. It does not watch `Photos/`, and it does not sort a loose file you copied in by hand.
+
 ```bash
 python3 sort_photos.py
 ```
 
-Album copies of the same photo are kept once. Dates come from the Takeout metadata, then from the file name. The script copies files. It does not edit the photo bytes.
+It reads the dates inside those zips, then copies each photo into `Photos/YYYY/MM-Month/`. Album copies of the same photo are kept once. The original bytes are not edited.
+
+When that copy is finished, you are done with this script. Adding a photo later does not require it again.
 
 ## Faces
 
@@ -67,6 +73,8 @@ gallery/.venv/bin/python gallery/index_captions.py
 Each still photo gets a short paragraph. Search uses that text. The job walks the folders when it starts, then works through that list. A photo added after the walk waits for the next run. A photo whose file time changed is described again.
 
 ## New photos
+
+Do not run `sort_photos.py` for these. That script is only for a fresh `takeout-*.zip`.
 
 Nothing watches the folders.
 
