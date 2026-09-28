@@ -113,6 +113,45 @@ def scanned_set():
         conn.close()
 
 
+def add_face(relpath, box, name=""):
+    x1, y1, x2, y2 = [float(value) for value in box]
+    if min(x1, y1, x2, y2) < 0 or max(x1, y1, x2, y2) > 1:
+        raise ValueError("bad box")
+    if x2 - x1 < 0.02 or y2 - y1 < 0.02:
+        raise ValueError("bad box")
+    conn = connect()
+    person = conn.execute(
+        "INSERT INTO people(name, cover_face_id) VALUES ('', NULL)"
+    )
+    person_id = person.lastrowid
+    face = conn.execute(
+        """
+        INSERT INTO faces(relpath, x1, y1, x2, y2, score, person_id, embedding)
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+        """,
+        (relpath, x1, y1, x2, y2, 1.0, person_id),
+    )
+    face_id = face.lastrowid
+    conn.execute(
+        "UPDATE people SET cover_face_id = ? WHERE id = ?",
+        (face_id, person_id),
+    )
+    conn.commit()
+    export_metadata(conn)
+    conn.close()
+    merged_into = None
+    cleaned = str(name or "").strip()
+    if cleaned:
+        merged_into = set_name(person_id, cleaned)
+        if merged_into:
+            person_id = merged_into
+    return {
+        "face_id": face_id,
+        "person_id": person_id,
+        "merged_into": merged_into,
+    }
+
+
 def set_name(person_id, name):
     conn = connect()
     name = name.strip()

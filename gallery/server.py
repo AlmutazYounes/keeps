@@ -7,6 +7,7 @@ Originals stay in Photos/. Thumbnails are cached under gallery/cache/.
 import json
 import mimetypes
 import os
+import shutil
 import plistlib
 import re
 import socket
@@ -19,6 +20,7 @@ import captions_db
 import candidates
 import categories
 import dispose_db
+import edits
 import dispose_lib
 import faces_db
 import jobs_db
@@ -1125,6 +1127,85 @@ def candidate_payload():
     return {"count": len(items), "items": items}
 
 
+def remember_file(path):
+    path = Path(path)
+    rel = path.relative_to(PHOTOS)
+    parts = rel.parts
+    year = parts[0] if parts else "Unknown"
+    month = parts[1] if len(parts) > 1 else "Unknown"
+    stat = path.stat()
+    taken = datetime.fromtimestamp(stat.st_mtime)
+    date = ""
+    if year.isdigit() and month != "Unknown" and taken.year == int(year):
+        date = taken.strftime("%Y-%m-%d")
+    photo = {
+        "rel": str(rel),
+        "name": path.name,
+        "ext": path.suffix.lower(),
+        "kind": kind_for(path.suffix.lower()),
+        "year": year,
+        "month": month,
+        "date": date,
+        "mtime": stat.st_mtime,
+        "size": stat.st_size,
+        "label": label_for(year, month),
+    }
+    with LIBRARY_LOCK:
+        return library_actions.add_photo(LIBRARY, photo)
+
+
+def save_edit(photo_id, mode, turns, straighten, crop):
+    photo = LIBRARY["by_id"].get(int(photo_id))
+    if photo is None or photo["kind"] == "video":
+        raise LookupError(photo_id)
+    src = library_actions.photo_file(PHOTOS, photo["rel"])
+    if mode == "replace":
+        tmp = src.with_name("." + src.name + ".editing")
+        try:
+            edits.render_edit(src, tmp, turns, straighten, crop)
+            os.replace(tmp, src)
+        finally:
+            tmp.unlink(missing_ok=True)
+        stat = src.stat()
+        with LIBRARY_LOCK:
+            photo["size"] = stat.st_size
+            photo["mtime"] = stat.st_mtime
+        for path in (thumb_path(photo), view_path(photo)):
+            path.unlink(missing_ok=True)
+        return {"ok": True, "replaced": True, "id": photo["id"], "name": photo["name"]}
+    dest = src.parent / edits.copy_name(src.parent, src.name)
+    edits.render_edit(src, dest, turns, straighten, crop)
+    stored = remember_file(dest)
+    return {
+        "ok": True,
+        "replaced": False,
+        "id": stored["id"],
+        "name": stored["name"],
+        "item": [stored["id"], stored["name"], stored["kind"], stored["date"]],
+        "year": stored["year"],
+        "month": stored["month"],
+        "label": label_for(stored["year"], stored["month"]),
+    }
+
+
+def add_manual_face(photo_id, box, name):
+    photo = LIBRARY["by_id"].get(int(photo_id))
+    if photo is None or photo["kind"] == "video":
+        raise LookupError(photo_id)
+    x1 = float(box["x"])
+    y1 = float(box["y"])
+    x2 = x1 + float(box["w"])
+    y2 = y1 + float(box["h"])
+    record = faces_db.add_face(photo["rel"], (x1, y1, x2, y2), name)
+    crop = ensure_face_box(record["face_id"])
+    if crop is not None:
+        FACE_CROPS.mkdir(parents=True, exist_ok=True)
+        target = FACE_CROPS / f"{record['face_id']}.jpg"
+        if not target.is_file():
+            shutil.copyfile(crop, target)
+    return record
+
+
 def delete_ids(raw_ids):
     with LIBRARY_LOCK:
         chosen = []
@@ -1325,6 +1406,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/delete":
             self.delete_selected()
             return
+        if path == "/api/edit":
+            self.save_photo_edit()
+            return
+        if path == "/api/faces":
+            self.save_manual_face()
+            return
         if path == "/api/review/start":
             status = start_dispose()
             if status == "no-indexer":
@@ -1348,6 +1435,58 @@ class Handler(BaseHTTPRequestHandler):
             "name": name,
             "merged_into": merged_into,
         }).encode()
+        self.respond(200, body, "application/json")
+
+    def json_body(self):
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length > 100000:
+            return None
+        return json.loads(self.rfile.read(length) or b"{}")
+
+    def save_photo_edit(self):
+        payload = self.json_body()
+        if payload is None:
+            self.respond(413, b"too large", "text/plain")
+            return
+        mode = payload.get("mode")
+        if mode not in ("copy", "replace"):
+            self.respond(400, b"bad edit", "text/plain")
+            return
+        crop = payload.get("crop")
+        if crop is not None and not isinstance(crop, dict):
+            self.respond(400, b"bad edit", "text/plain")
+            return
+        try:
+            result = save_edit(
+                payload.get("id"),
+                mode,
+                payload.get("turns") or 0,
+                payload.get("straighten") or 0,
+                crop,
+            )
+        except (LookupError, ValueError, FileNotFoundError, OSError, TypeError):
+            self.respond(400, b"bad edit", "text/plain")
+            return
+        except RuntimeError:
+            self.respond(500, b"edit failed", "text/plain")
+            return
+        self.respond(200, json.dumps(result).encode(), "application/json")
+
+    def save_manual_face(self):
+        payload = self.json_body()
+        if payload is None:
+            self.respond(413, b"too large", "text/plain")
+            return
+        box = payload.get("box")
+        if not isinstance(box, dict):
+            self.respond(400, b"bad face", "text/plain")
+            return
+        try:
+            record = add_manual_face(payload.get("id"), box, payload.get("name") or "")
+        except (LookupError, ValueError, FileNotFoundError, TypeError):
+            self.respond(400, b"bad face", "text/plain")
+            return
+        body = json.dumps({"ok": True, **record}).encode()
         self.respond(200, body, "application/json")
 
     def delete_selected(self):

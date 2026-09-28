@@ -46,6 +46,24 @@ class LibraryActionsTest(unittest.TestCase):
         self.assertEqual(library["groups"][0]["items"][0][0], 2)
         self.assertEqual(library["count"], 1)
 
+    def test_add_photo_keeps_existing_ids(self):
+        library = {
+            "count": 1,
+            "by_id": {5: {"id": 5, "name": "old.jpg"}},
+            "groups": [{"year": "2024", "month": "07-July", "label": "July 2024", "items": [[5, "old.jpg", "image", ""]]}],
+        }
+        added = library_actions.add_photo(library, {
+            "name": "new.jpg",
+            "kind": "image",
+            "date": "2024-07-02",
+            "year": "2024",
+            "month": "07-July",
+        })
+        self.assertEqual(added["id"], 6)
+        self.assertEqual(library["by_id"][5]["name"], "old.jpg")
+        self.assertEqual(library["groups"][0]["items"][0][0], 6)
+        self.assertEqual(library["count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
