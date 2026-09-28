@@ -1,0 +1,14 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+
+Photos/
+_staging/
+_sort.log
+_sort_state.sqlite
+
+gallery/.venv/
+gallery/cache/
+gallery/faces/
+gallery/captions/
+gallery/models/
