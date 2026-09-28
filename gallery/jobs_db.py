@@ -3,10 +3,11 @@
 import os
 import sqlite3
 import time
-from pathlib import Path
 
-ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
-APP = ROOT / "gallery"
+import library_root
+
+ROOT = library_root.library_root()
+APP = library_root.data_dir()
 DB_PATH = APP / "jobs" / "jobs.sqlite"
 
 

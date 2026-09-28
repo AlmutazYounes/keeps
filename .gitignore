@@ -15,6 +15,7 @@ gallery/jobs/
 gallery/dispose/
 gallery/models/
 gallery/carto.key
+gallery/library.json
 
 docs/context.md
 docs/story.md

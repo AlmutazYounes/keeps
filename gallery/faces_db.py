@@ -2,10 +2,11 @@
 
 import json
 import sqlite3
-from pathlib import Path
 
-ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
-APP = ROOT / "gallery"
+import library_root
+
+ROOT = library_root.library_root()
+APP = library_root.data_dir()
 DB_PATH = APP / "faces" / "faces.sqlite"
 META_PATH = APP / "faces" / "image_faces.json"
 

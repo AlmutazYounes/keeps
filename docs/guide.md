@@ -2,18 +2,7 @@
 
 The server reads `Photos/` once, when it starts. A file added after that stays invisible until you start the server again.
 
-The scripts look for the library at `/Volumes/SamsungT7/Google Photos Backup`. Change `ROOT` in each of these files if your copy lives somewhere else.
-
-- `sort_photos.py`
-- `gallery/server.py`
-- `gallery/faces_db.py`
-- `gallery/faces_lib.py`
-- `gallery/captions_db.py`
-- `gallery/caption_lib.py`
-- `gallery/jobs_db.py`
-- `gallery/dispose_db.py`
-- `gallery/index_dispose.py`
-- `gallery/model_choices.py`
+The library is the folder Keeps lives in. Open Settings and choose another folder if the photos live somewhere else. Start Keeps again after that. Photos sit in `Photos/` inside the folder you pick.
 
 Keeps uses one dark theme. The choice is saved in the browser.
 
@@ -142,7 +131,7 @@ Each still photo gets a short paragraph. Search uses that text. Finished caption
 
 ## Settings
 
-Open Settings to pause, continue, or rewrite a database. Pause stops a job, and a paused job stays paused across a restart. Continue picks up what is left. Rewrite clears that database and runs the model again. A face rewrite also clears names you typed.
+Open Settings to choose the library folder, and to pause, continue, or rewrite a database. A new folder is used the next time Keeps starts. Pause stops a job, and a paused job stays paused across a restart. Continue picks up what is left. Rewrite clears that database and runs the model again. A face rewrite also clears names you typed.
 
 The model picker chooses the face finder, the face match model, and the description model. A job that is already running keeps the model it started with.
 

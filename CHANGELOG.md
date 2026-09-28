@@ -4,6 +4,7 @@
 
 - The README is one sentence, a short list, and one run example.
 - Local notes stay on disk and leave the published tree.
+- The library folder is where Keeps lives, or a folder chosen in Settings.
 
 ## 0.1.0
 

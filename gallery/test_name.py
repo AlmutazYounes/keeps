@@ -46,6 +46,7 @@ class NameTests(unittest.TestCase):
             "docs/decisions",
             "AGENTS.md",
             ".cursor",
+            "gallery/library.json",
         ):
             self.assertIn(path, ignore.splitlines())
 

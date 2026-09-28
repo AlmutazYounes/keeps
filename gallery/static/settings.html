@@ -84,7 +84,12 @@ try {
     width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
     border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 14px;
   }
-  label.model select:focus, #model-save:focus, .sync-actions button:focus {
+  #library-path {
+    width: 100%; margin: 12px 0 4px;
+    border: 1px solid var(--line); background: var(--field); color: var(--ink);
+    border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 14px;
+  }
+  label.model select:focus, #library-path:focus, #model-save:focus, .sync-actions button:focus {
     outline: 2px solid #8ab4f8; outline-offset: 2px;
   }
   .form-actions { display: flex; justify-content: flex-end; padding: 4px 0 12px; }
@@ -135,6 +140,22 @@ try {
 </header>
 <main>
   <h2 class="page">Settings</h2>
+  <section class="panel" id="library">
+    <div class="panel-top">
+      <h2>Library</h2>
+      <p class="note" id="library-note">Reading the library folder.</p>
+    </div>
+    <form id="library-form">
+      <label class="model" for="library-path">
+        <span class="model-copy"><b>Folder</b><span>Photos live in a Photos directory inside this folder.</span></span>
+      </label>
+      <input id="library-path" name="root" type="text" spellcheck="false" autocomplete="off" aria-label="Library folder">
+      <div class="form-actions sync-actions">
+        <button id="library-choose" type="button">Choose</button>
+        <button id="library-save" class="go" type="submit">Save</button>
+      </div>
+    </form>
+  </section>
   <section class="panel" id="models">
     <div class="panel-top">
       <h2>Models</h2>
@@ -306,8 +327,86 @@ function load() {
     })
     .catch(() => { statusEl.textContent = "Could not read sync status."; });
 }
+const libraryNote = document.getElementById("library-note");
+const libraryPath = document.getElementById("library-path");
+const libraryChoose = document.getElementById("library-choose");
+const librarySave = document.getElementById("library-save");
+
+function libraryMessage(data) {
+  if (!data) return "Could not read the library folder.";
+  if (data.denied) return "Keeps cannot read that folder.";
+  if (data.missing) return "That folder is missing. Keeps is using the folder it lives in.";
+  if (data.restart && !data.photos) return "Saved. Start Keeps again. That folder has no Photos directory yet.";
+  if (data.restart) return "Saved. Start Keeps again to open this folder.";
+  if (!data.photos) return "No Photos folder there yet.";
+  if (!data.custom) return "This is the folder Keeps lives in.";
+  return "Saved. This run is already using that folder.";
+}
+
+function paintLibrary(data) {
+  libraryPath.value = data.saved || data.active || "";
+  libraryNote.textContent = libraryMessage(data);
+  libraryChoose.disabled = false;
+  librarySave.disabled = false;
+  librarySave.textContent = "Save";
+  libraryChoose.textContent = "Choose";
+}
+
+function libraryBusy(label) {
+  libraryNote.textContent = label;
+  libraryChoose.disabled = true;
+  librarySave.disabled = true;
+}
+
+function postLibrary(body, busy) {
+  libraryBusy(busy);
+  fetch("/api/library-root", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then((response) => response.json().catch(() => null).then((data) => ({ ok: response.ok, data: data })))
+    .then((result) => {
+      if (result.data && result.data.active) {
+        paintLibrary(result.data);
+        if (!result.ok && result.data.reason === "cancelled") {
+          libraryNote.textContent = "No folder was chosen.";
+        } else if (!result.ok && !result.data.denied && !result.data.missing) {
+          libraryNote.textContent = "Couldn't save that folder.";
+        }
+        return;
+      }
+      throw new Error("save failed");
+    })
+    .catch(() => {
+      libraryChoose.disabled = false;
+      librarySave.disabled = false;
+      librarySave.textContent = "Save";
+      libraryChoose.textContent = "Choose";
+      libraryNote.textContent = "Couldn't save that folder.";
+    });
+}
+
+function loadLibrary() {
+  fetch("/api/library-root")
+    .then((response) => response.ok ? response.json() : null)
+    .then((data) => {
+      if (!data || !data.active) throw new Error("missing");
+      paintLibrary(data);
+    })
+    .catch(() => { libraryNote.textContent = "Could not read the library folder."; });
+}
+
+document.getElementById("library-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  postLibrary({ root: libraryPath.value }, "Saving the folder.");
+});
+libraryChoose.addEventListener("click", () => {
+  postLibrary({ pick: true }, "Choosing a folder.");
+});
+
 load();
 loadModels();
+loadLibrary();
 setInterval(load, 3000);
 </script>
 </body>
