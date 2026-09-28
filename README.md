@@ -24,20 +24,6 @@ The pictures, the face database, the captions, the thumbnails, and the model wei
 
 The scripts look for the library at `/Volumes/SamsungT7/Google Photos Backup`. Change `ROOT` in each script if your copy lives somewhere else.
 
-## Gallery
-
-The server uses only the Python standard library.
-
-```bash
-python3 gallery/server.py
-```
-
-It reads the folders once, when it starts. A file added after that stays invisible until you start the server again.
-
-Photos, Videos, and Faces share one dark theme. The theme choice is saved in the browser.
-
-Search matches the file name, a person's name, and the description once a photo has one.
-
 ## Download a Google Takeout
 
 Do this once, from the Google account that owns the photos.
@@ -63,13 +49,23 @@ The disk needs at least 20 GiB free. The script stops if there is less.
 python3 sort_photos.py
 ```
 
-It reads dates from the zip metadata, then from the file name. It copies each photo into `Photos/YYYY/MM-Month/`. Album copies of the same photo are kept once. The original bytes are not edited.
+It reads the date from the Takeout metadata, then the file name, then the file itself. It copies each photo into `Photos/YYYY/MM-Month/`. Album copies of the same photo are kept once. The original bytes are not edited.
 
 When the copy finishes, you are done with this script.
 
-## For agents
+## Gallery
 
-Clone, path setup, the indexer, and the model files are in [AGENTS.md](AGENTS.md).
+The server uses only the Python standard library.
+
+```bash
+python3 gallery/server.py
+```
+
+Open http://127.0.0.1:8765. It reads the folders once, when it starts. A file added after that stays invisible until you start the server again.
+
+Photos, Videos, and Faces share one dark theme. The theme choice is saved in the browser.
+
+Search matches the file name, a person's name, and the description once a photo has one.
 
 ## Faces
 
@@ -121,3 +117,7 @@ On startup the server compares the folders with those databases. It runs face re
 The grid picks up the file from that scan. The two jobs then save the new photo and leave the rest alone.
 
 Videos show in the Videos tab. The face index and the caption index only read still photos.
+
+## For agents
+
+Clone, path setup, the indexer, and the model files are in [AGENTS.md](AGENTS.md).
