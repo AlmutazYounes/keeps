@@ -51,9 +51,21 @@ try {
   h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.03em; }
   a.nav, button.nav { color: inherit; text-decoration: none; background: var(--chip); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
   a.nav.on { background: var(--nav-on); color: var(--nav-on-ink); }
+  .tabs { display: flex; align-items: center; padding: 3px; background: var(--chip); border-radius: 999px; }
+  .tabs a { color: var(--ink); text-decoration: none; border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600; }
+  .tabs a.on { background: var(--nav-on); color: var(--nav-on-ink); }
+  .links { display: flex; align-items: center; gap: 14px; }
+  .links a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  .links a:hover { color: var(--ink); }
+  .actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .actions button {
+    border: 1px solid var(--line); background: transparent; color: var(--ink);
+    border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .actions button.on { background: var(--nav-on); color: var(--nav-on-ink); border-color: var(--nav-on); }
   #count { color: var(--muted); font-size: 14px; white-space: nowrap; }
   #search {
-    margin-left: auto; width: min(320px, 40vw);
+    margin-left: 8px; width: min(260px, 28vw);
     border: 0; background: var(--chip); border-radius: 999px;
     padding: 10px 12px; font: inherit; font-size: 14px; color: inherit;
   }
@@ -249,6 +261,7 @@ try {
   }
   .cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .cell .tick { display: none; }
+  .cell:hover .tick,
   body.selecting .cell .tick {
     display: block;
     position: absolute; top: 8px; right: 8px;
@@ -372,16 +385,22 @@ try {
     </svg>
     <h1 id="title">Photos</h1>
   </a>
-  <a class="nav on" id="tab-photos" href="/">Photos</a>
-  <a class="nav" id="tab-videos" href="/videos">Videos</a>
-  <a class="nav" href="/faces">Faces</a>
-  <a class="nav" href="/categories">Categories</a>
-  <a class="nav" href="/review">Review</a>
-  <a class="nav" href="/settings">Settings</a>
+  <nav class="tabs" aria-label="Library">
+    <a class="on" id="tab-photos" href="/">Photos</a>
+    <a id="tab-videos" href="/videos">Videos</a>
+  </nav>
+  <nav class="links" aria-label="More">
+    <a href="/faces">Faces</a>
+    <a href="/categories">Categories</a>
+    <a href="/review">Review</a>
+    <a href="/settings">Settings</a>
+  </nav>
   <div id="count"></div>
-  <button id="theme" class="nav" type="button">Light</button>
-  <button id="select" class="nav" type="button" aria-pressed="false">Select</button>
-  <button id="search-help" class="nav" type="button" aria-expanded="false" aria-controls="search-help-panel">Help</button>
+  <div class="actions">
+    <button id="theme" type="button">Light</button>
+    <button id="select" type="button" aria-pressed="false">Select</button>
+    <button id="search-help" type="button" aria-expanded="false" aria-controls="search-help-panel">Help</button>
+  </div>
   <input id="search" type="search" placeholder="Search photos" autocomplete="off">
 </header>
 <div id="filterbar">
@@ -495,6 +514,7 @@ let captionById = {};
 let allGroups = [];
 let groups = [];
 let selecting = false;
+let anchorId = null;
 const selectedIds = new Set();
 let namedPeople = [];
 let flat = [];
@@ -623,7 +643,7 @@ function render() {
         const badge = item[2] === "video" ? `<span class="badge"></span>` : "";
         const picked = selectedIds.has(item[0]) ? " picked" : "";
         parts.push(
-          `<button class="cell${picked}" data-id="${item[0]}" style="transform:translate(${x}px,${y}px);width:${block.cell}px;height:${block.cell}px"><img data-src="${sourceFor(item, false)}" alt=""><span class="tick"></span>${badge}</button>`
+          `<button class="cell${picked}" data-id="${item[0]}" style="transform:translate(${x}px,${y}px);width:${block.cell}px;height:${block.cell}px"><img data-src="${sourceFor(item, false)}" alt=""><span class="tick" aria-label="Select photo"></span>${badge}</button>`
         );
       }
     }
@@ -895,15 +915,41 @@ function step(delta) {
   openAt(flat[next].item[0]);
 }
 
+function idsInRange(ids, anchor, target) {
+  const startAt = ids.indexOf(anchor);
+  const endAt = ids.indexOf(target);
+  if (startAt < 0 || endAt < 0) return [target];
+  const start = Math.min(startAt, endAt);
+  const end = Math.max(startAt, endAt);
+  return ids.slice(start, end + 1);
+}
+
+function markFromTile(id, shift) {
+  const order = flat.map((entry) => entry.item[0]);
+  if (shift && anchorId !== null) {
+    idsInRange(order, anchorId, id).forEach((itemId) => selectedIds.add(itemId));
+  } else if (selecting && selectedIds.has(id)) {
+    selectedIds.delete(id);
+  } else {
+    selectedIds.add(id);
+  }
+  if (!shift || anchorId === null) anchorId = id;
+  if (!selecting) {
+    setSelecting(true);
+    return;
+  }
+  paintSelectBar();
+  stage.querySelectorAll(".cell").forEach((cell) => {
+    cell.classList.toggle("picked", selectedIds.has(Number(cell.dataset.id)));
+  });
+}
+
 stage.addEventListener("click", (event) => {
   const button = event.target.closest(".cell");
   if (!button) return;
   const id = Number(button.dataset.id);
-  if (selecting) {
-    if (selectedIds.has(id)) selectedIds.delete(id);
-    else selectedIds.add(id);
-    button.classList.toggle("picked", selectedIds.has(id));
-    paintSelectBar();
+  if (event.target.closest(".tick") || selecting || event.shiftKey) {
+    markFromTile(id, event.shiftKey);
     return;
   }
   openAt(id);
@@ -932,7 +978,10 @@ function setSelecting(on) {
   button.classList.toggle("on", on);
   button.setAttribute("aria-pressed", on ? "true" : "false");
   button.textContent = on ? "Done" : "Select";
-  if (!on) selectedIds.clear();
+  if (!on) {
+    selectedIds.clear();
+    anchorId = null;
+  }
   paintSelectBar();
   lastKey = "";
   render();
