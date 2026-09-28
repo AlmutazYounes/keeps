@@ -32,7 +32,7 @@ class NameTests(unittest.TestCase):
         self.assertIn("img.shields.io/badge/Python-3", readme)
         self.assertIn("github/last-commit/AlmutazYounes/keeps", readme)
         self.assertIn("github/issues/AlmutazYounes/keeps", readme)
-        for name in ("home.png", "faces.png", "settings.png"):
+        for name in ("logo.png", "home.png", "faces.png", "settings.png"):
             self.assertIn(f"docs/images/{name}", readme)
         self.assertIn("https://github.com/AlmutazYounes/keeps", context)
         self.assertIn("Keeps/1.0 (personal photo library)", server)

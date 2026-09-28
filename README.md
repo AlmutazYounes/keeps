@@ -1,5 +1,7 @@
 # Keeps
 
+<img src="docs/images/logo.png" width="64" height="64" alt="Keeps">
+
 [![Python 3](https://img.shields.io/badge/Python-3-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
 [![localhost](https://img.shields.io/badge/localhost-8765-1a73e8?style=flat)](#run-it)
 [![updated](https://img.shields.io/github/last-commit/AlmutazYounes/keeps?style=flat&label=updated)](https://github.com/AlmutazYounes/keeps/commits/main)
