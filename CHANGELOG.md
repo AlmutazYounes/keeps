@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The README is one sentence, a short list, and one run example.
+- Local notes stay on disk and leave the published tree.
+
 ## 0.1.0
 
 2026-09-28
