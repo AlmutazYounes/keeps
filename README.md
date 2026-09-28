@@ -2,16 +2,40 @@
 
 <img src="docs/images/logo.png" width="64" height="64" alt="Keeps">
 
-[![Python 3](https://img.shields.io/badge/Python-3-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
-[![localhost](https://img.shields.io/badge/localhost-8765-1a73e8?style=flat)](#run-it)
-[![updated](https://img.shields.io/github/last-commit/AlmutazYounes/keeps?style=flat&label=updated)](https://github.com/AlmutazYounes/keeps/commits/main)
-[![issues](https://img.shields.io/github/issues/AlmutazYounes/keeps?style=flat)](https://github.com/AlmutazYounes/keeps/issues)
+## What this is
 
-A private gallery for a Google Photos takeout. Photos stay in `Photos/` on your machine. The site runs at http://127.0.0.1:8765.
+A private gallery for a Google Photos takeout.
 
-[Run it](#run-it) · [Screenshots](#screenshots) · [Takeout](#download-a-google-takeout) · [Search](#search) · [Faces](#faces) · [Settings](#settings)
+[Use](#use) · [Screenshots](#screenshots) · [Takeout](#download-a-google-takeout) · [Search](#search) · [Faces](#faces) · [Settings](#settings)
 
-## Run it
+## Who it is for
+
+You, on the computer that holds the photos. The pictures stay in `Photos/` on that machine. The site listens only there. There is no account.
+
+## Install
+
+Python 3 runs the site. Clone this repo and start it from that folder.
+
+Faces and captions need a virtualenv and model files. Those steps are under Faces and Descriptions.
+
+The scripts look for the library here:
+
+`/Volumes/SamsungT7/Google Photos Backup`
+
+Change `ROOT` in each of these files if your copy lives somewhere else.
+
+- `sort_photos.py`
+- `gallery/server.py`
+- `gallery/faces_db.py`
+- `gallery/faces_lib.py`
+- `gallery/captions_db.py`
+- `gallery/caption_lib.py`
+- `gallery/jobs_db.py`
+- `gallery/dispose_db.py`
+- `gallery/index_dispose.py`
+- `gallery/model_choices.py`
+
+## Use
 
 The server uses only the Python standard library.
 
@@ -20,8 +44,6 @@ python3 gallery/server.py
 ```
 
 Open http://127.0.0.1:8765. It reads `Photos/` once, when it starts. A file added after that stays invisible until you start the server again.
-
-The scripts look for the library at `/Volumes/SamsungT7/Google Photos Backup`. Change `ROOT` in each script if your copy lives somewhere else.
 
 Keeps uses one dark theme. The choice is saved in the browser.
 
@@ -176,3 +198,7 @@ The pictures, the face database, the captions, the thumbnails, and the model wei
 ## For agents
 
 Clone, path setup, the indexer, and the model files are in [AGENTS.md](AGENTS.md).
+
+## License
+
+MIT. The terms are in [LICENSE](LICENSE).

@@ -29,15 +29,31 @@ class NameTests(unittest.TestCase):
         context = (ROOT / "docs" / "context.md").read_text()
         server = (ROOT / "gallery" / "server.py").read_text()
         self.assertTrue(readme.startswith("# Keeps\n"))
-        self.assertIn("img.shields.io/badge/Python-3", readme)
-        self.assertIn("github/last-commit/AlmutazYounes/keeps", readme)
-        self.assertIn("github/issues/AlmutazYounes/keeps", readme)
+        self.assertIn("## What this is\n\nA private gallery for a Google Photos takeout.", readme)
+        self.assertIn("## Who it is for", readme)
+        self.assertIn("## Install", readme)
+        self.assertIn("## Use", readme)
+        self.assertNotIn("img.shields.io", readme)
         for name in ("logo.png", "home.png", "faces.png", "settings.png"):
             self.assertIn(f"docs/images/{name}", readme)
         self.assertIn("https://github.com/AlmutazYounes/keeps", context)
         self.assertIn("Keeps/1.0 (personal photo library)", server)
         self.assertNotIn("local-photos", context)
         self.assertNotIn("LocalPhotos", server)
+
+    def test_the_license_is_mit(self):
+        readme = (ROOT / "README.md").read_text()
+        license_text = (ROOT / "LICENSE").read_text()
+        self.assertIn("## License", readme)
+        self.assertIn("[LICENSE](LICENSE)", readme)
+        self.assertIn("MIT License", license_text)
+        self.assertIn("Copyright (c) 2026 Motaz Younes", license_text)
+
+    def test_the_changelog_names_0_1_0(self):
+        changelog = (ROOT / "CHANGELOG.md").read_text()
+        self.assertTrue(changelog.startswith("# Changelog\n"))
+        self.assertIn("## 0.1.0", changelog)
+        self.assertIn("2026-09-28", changelog)
 
 
 if __name__ == "__main__":
