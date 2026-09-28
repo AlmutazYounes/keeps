@@ -623,7 +623,7 @@ function render() {
         const badge = item[2] === "video" ? `<span class="badge"></span>` : "";
         const picked = selectedIds.has(item[0]) ? " picked" : "";
         parts.push(
-          `<button class="cell${picked}" data-id="${item[0]}" style="transform:translate(${x}px,${y}px);width:${block.cell}px;height:${block.cell}px"><img src="${sourceFor(item, false)}" alt=""><span class="tick"></span>${badge}</button>`
+          `<button class="cell${picked}" data-id="${item[0]}" style="transform:translate(${x}px,${y}px);width:${block.cell}px;height:${block.cell}px"><img data-src="${sourceFor(item, false)}" alt=""><span class="tick"></span>${badge}</button>`
         );
       }
     }
@@ -633,11 +633,51 @@ function render() {
   floatEl.textContent = label;
   floatEl.style.visibility = active && active.top < scroll - 4 ? "visible" : "hidden";
   syncScrub(label, year);
-  if (key === lastKey) return;
-  lastKey = key;
-  stage.innerHTML = parts.join("");
-  document.querySelectorAll("#years button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.label === label || label.endsWith(button.dataset.year));
+  if (key !== lastKey) {
+    lastKey = key;
+    stage.innerHTML = parts.join("");
+    document.querySelectorAll("#years button").forEach((button) => {
+      button.classList.toggle("active", button.dataset.label === label || label.endsWith(button.dataset.year));
+    });
+  }
+  loadVisibleThumbs();
+}
+
+function cellTop(cell) {
+  const match = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(cell.style.transform || "");
+  return match ? Number(match[2]) : 0;
+}
+
+function loadVisibleThumbs() {
+  if (!layout) return;
+  const scroll = scroller.scrollTop;
+  const view = scroller.clientHeight;
+  const start = scroll - 200;
+  const end = scroll + view + 200;
+  stage.querySelectorAll(".cell img").forEach((img) => {
+    const cell = img.parentElement;
+    const y = cellTop(cell);
+    const height = cell.offsetHeight || layout.cell || 160;
+    const near = y + height >= start && y <= end;
+    const url = img.dataset.src || "";
+    if (!url) return;
+    if (!near) {
+      if (img.getAttribute("src") && !(img.complete && img.naturalWidth > 0)) {
+        img.removeAttribute("src");
+        img.dataset.next = "0";
+      }
+      return;
+    }
+    if (img.getAttribute("src")) {
+      if (!img.complete) return;
+      if (img.naturalWidth > 0) return;
+      if (Date.now() < Number(img.dataset.next || 0)) return;
+    }
+    const tries = Number(img.dataset.tries || 0);
+    if (tries >= 4) return;
+    img.dataset.tries = String(tries + 1);
+    img.dataset.next = String(Date.now() + 500);
+    img.src = tries ? url + "?r=" + tries : url;
   });
 }
 
@@ -996,6 +1036,14 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "ArrowLeft") step(-1);
   if (event.key === "ArrowRight") step(1);
 });
+stage.addEventListener("error", (event) => {
+  const img = event.target;
+  if (!img || img.tagName !== "IMG") return;
+  setTimeout(() => {
+    img.dataset.next = "0";
+    loadVisibleThumbs();
+  }, 350);
+}, true);
 scroller.addEventListener("scroll", () => {
   openScrub();
   if (frame) return;
