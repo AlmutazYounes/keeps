@@ -38,19 +38,38 @@ Photos, Videos, and Faces share one dark theme. The theme choice is saved in the
 
 Search matches the file name, a person's name, and the description once a photo has one.
 
-## Sort a takeout
+## Download a Google Takeout
 
-Run this only after you download a Google Takeout. It is not part of the gallery, and you do not run it for photos that are already in `Photos/`.
+Do this once, from the Google account that owns the photos.
 
-Put the Takeout archives in the library folder. The script looks only for files named `takeout-*.zip`. It does not watch `Photos/`, and it does not sort a loose file you copied in by hand.
+1. Open https://takeout.google.com.
+2. Choose Deselect all.
+3. Turn on Google Photos only.
+4. Keep every album if you want the whole library.
+5. Create the export as `.zip`. Google splits a large library into several zip files.
+6. Wait for the email, then download every part.
+
+Leave the names Google gives them. They look like `takeout-20260928T120000Z-001.zip`. The sorter only sees files that match `takeout-*.zip`. If a browser renames a download, rename it back.
+
+Put every zip in the library folder, next to `sort_photos.py`. Do not put them inside `Photos/`. Do not unzip them yourself.
+
+## Sort the Takeout
+
+Run this only for those zip files. Skip it when the photos are already in `Photos/`, and skip it when you add a loose file later.
+
+The disk needs at least 20 GiB free. The script stops if there is less.
 
 ```bash
 python3 sort_photos.py
 ```
 
-It reads the dates inside those zips, then copies each photo into `Photos/YYYY/MM-Month/`. Album copies of the same photo are kept once. The original bytes are not edited.
+It reads dates from the zip metadata, then from the file name. It copies each photo into `Photos/YYYY/MM-Month/`. Album copies of the same photo are kept once. The original bytes are not edited.
 
-When that copy is finished, you are done with this script. Adding a photo later does not require it again.
+When the copy finishes, you are done with this script.
+
+## For agents
+
+Clone, path setup, the indexer, and the model files are in [AGENTS.md](AGENTS.md).
 
 ## Faces
 
@@ -69,13 +88,13 @@ gallery/.venv/bin/python gallery/index_faces.py
 
 People in fewer than 10 photos stay off the Faces page. Giving the same name to two groups merges them into one person.
 
-The index records a path when it finishes that photo. Run it again after you add pictures. It skips paths it already finished. It does not notice a new file by itself.
+Finished photos stay in the face database. A gallery restart runs this only for still photos that are not saved yet. You can also run the command above yourself. It skips paths it already finished.
 
 ## Descriptions
 
 Captions come from Florence-2, the ONNX build at `onnx-community/Florence-2-base-ft` on Hugging Face. Download these into `gallery/models/florence2/`:
 
-- `tokenizer.json` and the other tokenizer files from the repo root
+- `tokenizer.json`
 - `onnx/vision_encoder_q4f16.onnx`
 - `onnx/embed_tokens_q4f16.onnx`
 - `onnx/encoder_model_q4f16.onnx`
@@ -86,7 +105,7 @@ Captions come from Florence-2, the ONNX build at `onnx-community/Florence-2-base
 gallery/.venv/bin/python gallery/index_captions.py
 ```
 
-Each still photo gets a short paragraph. Search uses that text. The job walks the folders when it starts, then works through that list. A photo added after the walk waits for the next run. A photo whose file time changed is described again.
+Each still photo gets a short paragraph. Search uses that text. Finished captions stay in the database. A gallery restart describes only still photos that are missing or whose file time changed. A job that is already walking does not see a file added after it made its list. Restart the gallery after that file is in `Photos/`.
 
 ## New photos
 
