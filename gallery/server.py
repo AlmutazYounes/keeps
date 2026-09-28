@@ -913,6 +913,11 @@ def category_facts():
     places = {}
     shots = []
     docs = []
+    animals = []
+    food = []
+    nature = []
+    vehicles = []
+    spots = []
     for photo in LIBRARY["by_id"].values():
         if photo["kind"] == "video":
             continue
@@ -924,10 +929,20 @@ def category_facts():
             shots.append(photo["id"])
         if "document" in found:
             docs.append(photo["id"])
+        if "animal" in found:
+            animals.append(photo["id"])
+        if "food" in found:
+            food.append(photo["id"])
+        if "nature" in found:
+            nature.append(photo["id"])
+        if "vehicle" in found:
+            vehicles.append(photo["id"])
         point = points.get(photo["rel"])
         if not point:
             continue
-        places[photo["id"]] = categories.place_label(point[0], point[1], names)
+        label = categories.place_label(point[0], point[1], names)
+        places[photo["id"]] = label
+        spots.append((point[0], point[1], label))
     labels = []
     seen = set()
     for label in places.values():
@@ -943,6 +958,11 @@ def category_facts():
         "places": places,
         "screenshots": shots,
         "documents": docs,
+        "animals": animals,
+        "food": food,
+        "nature": nature,
+        "vehicles": vehicles,
+        "spots": spots,
         "names": labels,
         "geo": geo,
     }
@@ -964,6 +984,11 @@ def category_payload():
     return {
         "screenshots": _kind_card(facts["screenshots"]),
         "documents": _kind_card(facts["documents"]),
+        "animals": _kind_card(facts["animals"]),
+        "food": _kind_card(facts["food"]),
+        "nature": _kind_card(facts["nature"]),
+        "vehicles": _kind_card(facts["vehicles"]),
+        "map": categories.map_points(facts["spots"]),
         "places": cards,
         "names": facts["names"],
         "index": {
@@ -1188,6 +1213,9 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/media/"):
             self.serve_original(path[7:])
             return
+        if path.startswith("/vendor/"):
+            self.serve_vendor(path[len("/vendor/"):])
+            return
         self.respond(404, b"not found", "text/plain")
 
     def route_post(self):
@@ -1232,6 +1260,20 @@ class Handler(BaseHTTPRequestHandler):
         if not token.isdigit():
             return None
         return LIBRARY["by_id"].get(int(token))
+
+    def serve_vendor(self, rel):
+        if not rel or rel.startswith("/") or ".." in rel.split("/"):
+            self.respond(404, b"not found", "text/plain")
+            return
+        root = (APP / "static" / "vendor").resolve()
+        file = (root / rel).resolve()
+        if root not in file.parents or not file.is_file():
+            self.respond(404, b"not found", "text/plain")
+            return
+        ctype = mimetypes.types_map.get(file.suffix.lower(), "application/octet-stream")
+        if file.suffix == ".js":
+            ctype = "text/javascript"
+        self.serve_path(file, ctype, cache="private, max-age=86400")
 
     def serve_derived(self, token, path_fn, size, cache_name):
         photo = self.photo_from_token(token)
