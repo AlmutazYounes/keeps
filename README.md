@@ -65,7 +65,20 @@ Open http://127.0.0.1:8765. It reads the folders once, when it starts. A file ad
 
 Photos, Videos, and Faces share one dark theme. The theme choice is saved in the browser.
 
-Search matches the file name, a person's name, and the description once a photo has one.
+Search takes a sentence, and it also has filters you can edit. The Search section below has the query shapes.
+
+## Search
+
+Type a sentence in the search box. The gallery reads a saved person, a year or a date, and photos or videos. The remaining words are matched against the caption and the file name. You can change or clear each filter. The Photos and Videos tabs stay as they are.
+
+- `alex in a carseat video` keeps videos of Alex whose file name or caption mentions a car seat.
+- `sam wearing yellow` keeps Sam where the caption or the file name mentions yellow. The word wearing is ignored.
+- `sam in 2025` keeps Sam in 2025.
+- `September 2025` and `Sep 25, 2025` use the date stored on the item.
+
+A saved name matches without caring about capitalization. That includes a person whose name is an ordinary English word.
+
+Videos are not given descriptions, and faces are not saved for them. A video search still limits the grid to videos. It then checks the file name, plus a caption or a face if one was already saved.
 
 ## Faces
 

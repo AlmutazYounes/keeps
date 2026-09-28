@@ -17,9 +17,10 @@ from datetime import datetime, timezone
 import captions_db
 import faces_db
 import jobs_db
+import search_lib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 ROOT = Path("/Volumes/SamsungT7/Google Photos Backup")
 PHOTOS = ROOT / "Photos"
@@ -314,6 +315,27 @@ def person_record(conn, person_id, name, cover_id, count, rel_to_photo):
         "ids": ids,
         "photos": photos,
     }
+
+
+def search_payload(query):
+    people = people_payload().get("people") or []
+    parsed = search_lib.parse_query(query, people)
+    ids_by_person = {}
+    for person in people:
+        name = (person.get("name") or "").strip()
+        if name:
+            ids_by_person[name.casefold()] = person.get("ids") or []
+    texts = captions_db.caption_map()
+    captions = {}
+    for photo_id, photo in LIBRARY["by_id"].items():
+        text = texts.get(photo["rel"])
+        if text:
+            captions[photo_id] = text
+    matched = search_lib.filter_groups(
+        LIBRARY["groups"], parsed, captions, ids_by_person
+    )
+    ids = [item[0] for group in matched for item in group["items"]]
+    return {"filters": parsed, "count": len(ids), "ids": ids}
 
 
 def person_detail(person_id):
@@ -811,6 +833,15 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(404, b"not found", "text/plain")
                 return
             self.serve_path(crop, "image/jpeg", cache="private, max-age=86400")
+            return
+        if path == "/api/search":
+            if not LIBRARY["ready"]:
+                self.respond(503, b'{"ready":false}', "application/json")
+                return
+            params = parse_qs(urlparse(self.path).query)
+            query = (params.get("q") or [""])[0]
+            body = json.dumps(search_payload(query)).encode()
+            self.respond(200, body, "application/json")
             return
         if path == "/api/captions":
             if not LIBRARY["ready"]:
