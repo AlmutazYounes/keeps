@@ -2,6 +2,22 @@
 
 A private gallery for a Google Photos takeout. Photos already live in `Photos/YYYY/MM-Month/`. The site runs on your machine at http://127.0.0.1:8765.
 
+## Screenshots
+
+These pictures use colored placeholders. They are not photos from anyone's library.
+
+### Home
+
+![Home page with placeholder memories, a day grid, and the date scrubber](docs/images/home.png)
+
+### Faces
+
+![Faces page with placeholder people](docs/images/faces.png)
+
+### Settings
+
+![Settings page with sample sync counts](docs/images/settings.png)
+
 ## What stays off GitHub
 
 The pictures, the face database, the captions, the thumbnails, and the model weights are not in this repo. `.gitignore` keeps them local.
