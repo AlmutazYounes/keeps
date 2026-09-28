@@ -324,15 +324,18 @@ class PageCopyTests(unittest.TestCase):
         self.assertNotIn("\u2014", html)
 
     def test_readme_uses_placeholder_names(self):
-        readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
-        self.assertIn("alex in a carseat video", readme)
-        self.assertIn("sam wearing yellow", readme)
-        self.assertIn("sam in 2025", readme)
-        self.assertIn("screenshots from 2024", readme)
-        self.assertIn("documents in 2025", readme)
-        self.assertNotIn("Yara", readme)
-        self.assertNotIn("Haneen", readme)
-        self.assertNotIn("\u2014", readme)
+        root = Path(__file__).resolve().parents[1]
+        readme = (root / "README.md").read_text()
+        guide = (root / "docs" / "guide.md").read_text()
+        self.assertIn("alex in a carseat video", guide)
+        self.assertIn("sam wearing yellow", guide)
+        self.assertIn("sam in 2025", guide)
+        self.assertIn("screenshots from 2024", guide)
+        self.assertIn("documents in 2025", guide)
+        for text in (readme, guide):
+            self.assertNotIn("Yara", text)
+            self.assertNotIn("Haneen", text)
+            self.assertNotIn("\u2014", text)
 
 
 if __name__ == "__main__":

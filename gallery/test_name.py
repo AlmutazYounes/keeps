@@ -26,26 +26,34 @@ class NameTests(unittest.TestCase):
 
     def test_the_readme_and_repo_use_keeps(self):
         readme = (ROOT / "README.md").read_text()
-        context = (ROOT / "docs" / "context.md").read_text()
         server = (ROOT / "gallery" / "server.py").read_text()
-        self.assertTrue(readme.startswith("# Keeps\n"))
-        self.assertIn("## What this is\n\nA private gallery for a Google Photos takeout.", readme)
-        self.assertIn("## Who it is for", readme)
+        self.assertTrue(readme.startswith("# Keeps\n\nA private gallery for a Google Photos takeout.\n"))
+        self.assertIn("## What it does", readme)
         self.assertIn("## Install", readme)
-        self.assertIn("## Use", readme)
+        self.assertIn("## Example", readme)
+        self.assertIn("python3 gallery/server.py", readme)
+        self.assertIn("Scanning library...", readme)
+        self.assertIn("Open http://127.0.0.1:8765", readme)
         self.assertNotIn("img.shields.io", readme)
-        for name in ("logo.png", "home.png", "faces.png", "settings.png"):
-            self.assertIn(f"docs/images/{name}", readme)
-        self.assertIn("https://github.com/AlmutazYounes/keeps", context)
         self.assertIn("Keeps/1.0 (personal photo library)", server)
-        self.assertNotIn("local-photos", context)
         self.assertNotIn("LocalPhotos", server)
+
+    def test_local_notes_are_ignored(self):
+        ignore = (ROOT / ".gitignore").read_text()
+        for path in (
+            "docs/context.md",
+            "docs/story.md",
+            "docs/decisions",
+            "AGENTS.md",
+            ".cursor",
+        ):
+            self.assertIn(path, ignore.splitlines())
 
     def test_the_license_is_mit(self):
         readme = (ROOT / "README.md").read_text()
         license_text = (ROOT / "LICENSE").read_text()
         self.assertIn("## License", readme)
-        self.assertIn("[LICENSE](LICENSE)", readme)
+        self.assertIn("[MIT](LICENSE)", readme)
         self.assertIn("MIT License", license_text)
         self.assertIn("Copyright (c) 2026 Motaz Younes", license_text)
 
