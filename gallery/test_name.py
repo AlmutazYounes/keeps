@@ -41,6 +41,14 @@ class NameTests(unittest.TestCase):
         self.assertNotIn("local-photos", context)
         self.assertNotIn("LocalPhotos", server)
 
+    def test_the_license_is_mit(self):
+        readme = (ROOT / "README.md").read_text()
+        license_text = (ROOT / "LICENSE").read_text()
+        self.assertIn("## License", readme)
+        self.assertIn("[LICENSE](LICENSE)", readme)
+        self.assertIn("MIT License", license_text)
+        self.assertIn("Copyright (c) 2026 Motaz Younes", license_text)
+
     def test_the_changelog_names_0_1_0(self):
         changelog = (ROOT / "CHANGELOG.md").read_text()
         self.assertTrue(changelog.startswith("# Changelog\n"))

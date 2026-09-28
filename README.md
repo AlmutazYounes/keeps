@@ -198,3 +198,7 @@ The pictures, the face database, the captions, the thumbnails, and the model wei
 ## For agents
 
 Clone, path setup, the indexer, and the model files are in [AGENTS.md](AGENTS.md).
+
+## License
+
+MIT. The terms are in [LICENSE](LICENSE).
