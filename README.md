@@ -2,6 +2,14 @@
 
 A private gallery for a Google Photos takeout.
 
+Colored placeholders. Not photos from a real library.
+
+![Home page of Keeps, with placeholder memories, a day grid, and the date scrubber](docs/images/home.png)
+
+![Faces page of Keeps, with placeholder people](docs/images/faces.png)
+
+![Settings page of Keeps, with sample models and sync counts](docs/images/settings.png)
+
 ## What it does
 
 - Serves the library at http://127.0.0.1:8765
